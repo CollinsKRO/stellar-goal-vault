@@ -16,6 +16,8 @@ const INITIAL_VALUES = {
   targetAmount: '250',
   deadlineHours: '72',
   imageUrl: '',
+  imageFile: null as File | null,
+  imagePreview: '',
   externalLink: '',
 };
 
@@ -34,6 +36,7 @@ export function CreateCampaignForm({
   );
   const [touchedFields, setTouchedFields] = useState<Set<string>>(new Set());
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [imageError, setImageError] = useState<string>('');
 
   useEffect(() => {
     setValues((current) => {
@@ -72,6 +75,53 @@ export function CreateCampaignForm({
     update('acceptedTokens', nextTokens);
   }
 
+  function handleImageFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    setImageError('');
+
+    if (!file) {
+      update('imageFile', null);
+      update('imagePreview', '');
+      return;
+    }
+
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/png'];
+    if (!allowedTypes.includes(file.type)) {
+      setImageError('Only JPG and PNG images are allowed');
+      event.target.value = '';
+      return;
+    }
+
+    // Validate file size (2MB max)
+    const maxSize = 2 * 1024 * 1024; // 2MB in bytes
+    if (file.size > maxSize) {
+      setImageError('Image must be smaller than 2MB');
+      event.target.value = '';
+      return;
+    }
+
+    // Convert to base64 and create preview
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64String = reader.result as string;
+      update('imageFile', file);
+      update('imagePreview', base64String);
+    };
+    reader.onerror = () => {
+      setImageError('Failed to read image file');
+      event.target.value = '';
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function clearImage() {
+    update('imageFile', null);
+    update('imagePreview', '');
+    update('imageUrl', '');
+    setImageError('');
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -85,6 +135,9 @@ export function CreateCampaignForm({
     try {
       const deadline = Math.floor(Date.now() / 1000) + Number(values.deadlineHours) * 3600;
 
+      // Use uploaded image (base64) if available, otherwise fall back to URL
+      const finalImageUrl = values.imagePreview || values.imageUrl.trim() || undefined;
+
       await onCreate({
         creator: values.creator.trim(),
         title: values.title.trim(),
@@ -93,7 +146,7 @@ export function CreateCampaignForm({
         targetAmount: Number(values.targetAmount),
         deadline,
         metadata: {
-          imageUrl: values.imageUrl.trim() || undefined,
+          imageUrl: finalImageUrl,
           externalLink: values.externalLink.trim() || undefined,
         },
       });
@@ -104,6 +157,7 @@ export function CreateCampaignForm({
       };
       setValues(resetValues);
       setValidationErrors(validateForm(resetValues));
+      setImageError('');
     } finally {
       setIsSubmitting(false);
     }
@@ -225,27 +279,77 @@ export function CreateCampaignForm({
           ) : null}
         </label>
 
-        <div className="row">
-          <label className="field-group">
-            <span>Image URL (optional)</span>
-            <input
-              type="url"
-              value={values.imageUrl}
-              onChange={(event) => update('imageUrl', event.target.value)}
-              placeholder="https://example.com/image.png"
-            />
-          </label>
-
-          <label className="field-group">
-            <span>External Link (optional)</span>
-            <input
-              type="url"
-              value={values.externalLink}
-              onChange={(event) => update('externalLink', event.target.value)}
-              placeholder="https://example.com/project"
-            />
-          </label>
+        <div className="field-group">
+          <span>Campaign Image (optional)</span>
+          <p className="muted" style={{ fontSize: '0.875rem', marginBottom: '0.5rem' }}>
+            Upload a banner image (JPG or PNG, max 2MB) or provide an image URL
+          </p>
+          
+          {values.imagePreview ? (
+            <div style={{ marginBottom: '1rem' }}>
+              <div style={{ 
+                width: '100%', 
+                maxWidth: '400px', 
+                borderRadius: '8px', 
+                overflow: 'hidden',
+                border: '1px solid var(--border-color, #e5e7eb)',
+              }}>
+                <img 
+                  src={values.imagePreview} 
+                  alt="Campaign preview" 
+                  style={{ 
+                    width: '100%', 
+                    height: 'auto',
+                    display: 'block',
+                  }}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={clearImage}
+                className="btn-ghost"
+                style={{ marginTop: '0.5rem' }}
+              >
+                Remove image
+              </button>
+            </div>
+          ) : (
+            <>
+              <input
+                type="file"
+                accept="image/jpeg,image/png"
+                onChange={handleImageFileChange}
+                disabled={!!values.imageUrl.trim()}
+                style={{ marginBottom: '0.5rem' }}
+              />
+              {imageError && (
+                <span className="field-error">{imageError}</span>
+              )}
+              
+              <div style={{ margin: '1rem 0', textAlign: 'center', color: 'var(--text-muted, #6b7280)' }}>
+                — or —
+              </div>
+              
+              <input
+                type="url"
+                value={values.imageUrl}
+                onChange={(event) => update('imageUrl', event.target.value)}
+                placeholder="https://example.com/image.png"
+                disabled={!!values.imagePreview}
+              />
+            </>
+          )}
         </div>
+
+        <label className="field-group">
+          <span>External Link (optional)</span>
+          <input
+            type="url"
+            value={values.externalLink}
+            onChange={(event) => update('externalLink', event.target.value)}
+            placeholder="https://example.com/project"
+          />
+        </label>
 
         {apiError ? (
           <div className="form-error">
