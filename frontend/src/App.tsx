@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { CampaignDetailPanel } from "./components/CampaignDetailPanel";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { FundedConfetti } from "./components/FundedConfetti";
@@ -15,6 +16,7 @@ import {
 } from "./components/TransactionPreviewModal";
 import { ToastContainer } from "./components/ToastContainer";
 import { WalletWidget } from "./components/WalletWidget";
+import { LanguageSelector } from "./components/LanguageSelector";
 import {
   claimCampaign,
   createCampaign,
@@ -126,6 +128,7 @@ function App() {
   const { id: paramId } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const freighter = useFreighter();
+  const { t } = useTranslation();
   const { toasts, addToast, dismiss } = useToast();
   const connectedWallet = freighter.publicKey;
 
@@ -660,8 +663,8 @@ function App() {
       <section className="hero animate-fade-in">
         <div className="hero-topline">
           <div>
-            <div className="eyebrow">Stellar Goal Vault</div>
-            <h1>Campaign control center</h1>
+            <div className="eyebrow">{t('app.eyebrow')}</div>
+            <h1>{t('app.title')}</h1>
           </div>
           <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
             <WalletWidget
@@ -675,16 +678,15 @@ function App() {
               onDisconnect={handleDisconnectWallet}
             />
             <button className="btn-ghost" type="button" onClick={handleThemeToggle}>
-              {themeMode === "dark" ? "Light mode" : "Dark mode"}
+              {themeMode === "dark" ? t('app.controls.lightMode') : t('app.controls.darkMode')}
             </button>
             <button className="btn-ghost" type="button" onClick={() => setIsShortcutsOpen(true)}>
-              Shortcuts
+              {t('app.controls.shortcuts')}
             </button>
           </div>
         </div>
         <p className="hero-copy">
-          Create campaigns, manage pledges, and track funding milestones as they
-          move through the Stellar goal vault lifecycle.
+          {t('app.description')}
         </p>
         {actionError ? <p className="form-error">{actionError.message}</p> : null}
         {actionMessage ? <p className="form-success">{actionMessage}</p> : null}
@@ -692,23 +694,23 @@ function App() {
 
       <section className="metric-grid animate-fade-in">
         <article className="metric-card">
-          <span>Total campaigns</span>
+          <span>{t('app.metrics.total')}</span>
           <strong>{metrics.total}</strong>
         </article>
         <article className="metric-card">
-          <span>Open campaigns</span>
+          <span>{t('app.metrics.open')}</span>
           <strong>{metrics.open}</strong>
         </article>
         <article className="metric-card">
-          <span>Funded campaigns</span>
+          <span>{t('app.metrics.funded')}</span>
           <strong>{metrics.funded}</strong>
         </article>
         <article className="metric-card">
-          <span>Claimed campaigns</span>
+          <span>{t('app.metrics.claimed')}</span>
           <strong>{metrics.claimed}</strong>
         </article>
         <article className="metric-card">
-          <span>Total pledged</span>
+          <span>{t('app.metrics.pledged')}</span>
           <strong>{metrics.pledged}</strong>
         </article>
       </section>
@@ -811,6 +813,10 @@ function App() {
         isOpen={isShortcutsOpen}
         onClose={() => setIsShortcutsOpen(false)}
       />
+
+      <footer>
+        <LanguageSelector />
+      </footer>
     </div>
   );
 }
