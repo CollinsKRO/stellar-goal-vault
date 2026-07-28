@@ -51,5 +51,4 @@ const mockCampaign: Campaign = {
 
 describe('CampaignDetailPanel', () => {
 
-  });
 });

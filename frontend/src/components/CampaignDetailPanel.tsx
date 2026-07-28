@@ -8,6 +8,7 @@ import { AddressAvatar } from './AddressAvatar';
 import { EmptyState } from './EmptyState';
 import { ContributorSummary } from './ContributorSummary';
 import { CampaignImage } from './CampaignImage';
+import { ShareButtons } from './ShareButtons';
 
 interface CampaignDetailPanelProps {
   campaign: Campaign | null;
@@ -398,6 +399,8 @@ export function CampaignDetailPanel({
           </a>
         </div>
       ) : null}
+
+      <ShareButtons campaign={activeCampaign} />
     </section>
   );
 }
