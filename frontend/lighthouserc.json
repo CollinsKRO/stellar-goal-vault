@@ -5,15 +5,8 @@
       "maxAutoBrowserLaunches": 1,
       "settings": {
         "chromeFlags": "--no-sandbox",
-        "onlyCategories": [
-          "performance",
-          "accessibility",
-          "best-practices",
-          "seo"
-        ],
-        "skipAudits": [
-          "unsized-images"
-        ]
+        "onlyCategories": ["performance", "accessibility", "best-practices", "seo"],
+        "skipAudits": ["unsized-images"]
       }
     },
     "upload": {

@@ -127,7 +127,9 @@ export function CreateCampaignForm({
             onChange={(event) => update('creator', event.target.value)}
             onBlur={() => handleFieldBlur('creator')}
             placeholder="G... creator public key"
-            className={validationErrors.creator && touchedFields.has('creator') ? 'input-error' : ''}
+            className={
+              validationErrors.creator && touchedFields.has('creator') ? 'input-error' : ''
+            }
             required
           />
           {validationErrors.creator && touchedFields.has('creator') ? (
@@ -163,7 +165,9 @@ export function CreateCampaignForm({
             rows={5}
             minLength={20}
             maxLength={500}
-            className={validationErrors.description && touchedFields.has('description') ? 'input-error' : ''}
+            className={
+              validationErrors.description && touchedFields.has('description') ? 'input-error' : ''
+            }
             required
           />
           {validationErrors.description && touchedFields.has('description') ? (
@@ -200,7 +204,11 @@ export function CreateCampaignForm({
             value={values.targetAmount}
             onChange={(event) => update('targetAmount', event.target.value)}
             onBlur={() => handleFieldBlur('targetAmount')}
-            className={validationErrors.targetAmount && touchedFields.has('targetAmount') ? 'input-error' : ''}
+            className={
+              validationErrors.targetAmount && touchedFields.has('targetAmount')
+                ? 'input-error'
+                : ''
+            }
             required
           />
           {validationErrors.targetAmount && touchedFields.has('targetAmount') ? (
@@ -217,7 +225,11 @@ export function CreateCampaignForm({
             value={values.deadlineHours}
             onChange={(event) => update('deadlineHours', event.target.value)}
             onBlur={() => handleFieldBlur('deadlineHours')}
-            className={validationErrors.deadlineHours && touchedFields.has('deadlineHours') ? 'input-error' : ''}
+            className={
+              validationErrors.deadlineHours && touchedFields.has('deadlineHours')
+                ? 'input-error'
+                : ''
+            }
             required
           />
           {validationErrors.deadlineHours && touchedFields.has('deadlineHours') ? (

@@ -26,11 +26,7 @@ export function useToast() {
   }, []);
 
   const addToast = useCallback(
-    (
-      message: string,
-      variant: ToastVariant = 'info',
-      link?: { href: string; label: string },
-    ) => {
+    (message: string, variant: ToastVariant = 'info', link?: { href: string; label: string }) => {
       const id = crypto.randomUUID();
       setToasts((prev) => [...prev, { id, message, variant, link }]);
       // Give the user more time to click the link when one is present.

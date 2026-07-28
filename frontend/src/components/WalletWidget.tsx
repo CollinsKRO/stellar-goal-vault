@@ -15,7 +15,14 @@ function truncateAddress(key: string): string {
   return `${key.slice(0, 4)}…${key.slice(-4)}`;
 }
 
-export function WalletWidget({ status, publicKey, error, network, onConnect, onDisconnect }: WalletWidgetProps) {
+export function WalletWidget({
+  status,
+  publicKey,
+  error,
+  network,
+  onConnect,
+  onDisconnect,
+}: WalletWidgetProps) {
   if (status === 'checking') {
     return <div className="wallet-widget wallet-widget--checking">Detecting wallet…</div>;
   }

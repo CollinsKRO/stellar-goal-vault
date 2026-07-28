@@ -11,4 +11,6 @@ fs.mkdirSync(outputDir, { recursive: true });
 fs.writeFileSync(outputPath, JSON.stringify(document, null, 2));
 
 // eslint-disable-next-line no-console
-console.log(`OpenAPI spec written to ${outputPath} (${document.paths ? Object.keys(document.paths).length : 0} paths)`);
+console.log(
+  `OpenAPI spec written to ${outputPath} (${document.paths ? Object.keys(document.paths).length : 0} paths)`,
+);

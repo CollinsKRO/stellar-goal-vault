@@ -1,5 +1,3 @@
-
-
 import { FormEvent, useState, useEffect } from 'react';
 import { MousePointer2 } from 'lucide-react';
 import { Campaign, AppConfig } from '../types/campaign';
@@ -26,21 +24,21 @@ interface CampaignDetailPanelProps {
 }
 
 const FEE_ESTIMATION_ERROR_CODES = new Set([
-  "SIMULATION_FAILED",
-  "SIMULATION_PREPARE_FAILED",
-  "SOURCE_ACCOUNT_LOAD_FAILED",
-  "STATE_RESTORE_REQUIRED",
+  'SIMULATION_FAILED',
+  'SIMULATION_PREPARE_FAILED',
+  'SOURCE_ACCOUNT_LOAD_FAILED',
+  'STATE_RESTORE_REQUIRED',
 ]);
 
 function describePledgeError(error: unknown): string {
   const code = (error as { code?: string } | null)?.code;
   if (code && FEE_ESTIMATION_ERROR_CODES.has(code)) {
-    return "Could not estimate fee. Check your connection and retry.";
+    return 'Could not estimate fee. Check your connection and retry.';
   }
   if (error instanceof Error && error.message.trim().length > 0) {
     return error.message;
   }
-  return "The pledge could not be completed. Please try again.";
+  return 'The pledge could not be completed. Please try again.';
 }
 
 function networkName(config: AppConfig | null | undefined): string {
@@ -79,11 +77,7 @@ export function CampaignDetailPanel({
   const [pledgeError, setPledgeError] = useState<string | null>(null);
   const walletReady = appConfig?.walletIntegrationReady ?? false;
 
-  useEffect(() => {
-
-  }, [campaign?.id, connectedWallet]);
-
-
+  useEffect(() => {}, [campaign?.id, connectedWallet]);
 
   if (isLoading) {
     return (
@@ -271,11 +265,7 @@ export function CampaignDetailPanel({
         {activeCampaign.acceptedTokens?.length > 1 && (
           <label className="field-group">
             <span>Token</span>
-            <select
-              value={selectedToken}
-              onChange={(e) => setPledgeToken(e.target.value)}
-              required
-            >
+            <select value={selectedToken} onChange={(e) => setPledgeToken(e.target.value)} required>
               {activeCampaign.acceptedTokens.map((token) => (
                 <option key={token} value={token}>
                   {token}

@@ -4,7 +4,17 @@ export function LanguageSelector() {
   const { t, i18n } = useTranslation();
 
   return (
-    <div className="language-selector" style={{ display: 'flex', gap: '8px', alignItems: 'center', justifyContent: 'center', padding: '16px', color: 'var(--text-secondary)' }}>
+    <div
+      className="language-selector"
+      style={{
+        display: 'flex',
+        gap: '8px',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '16px',
+        color: 'var(--text-secondary)',
+      }}
+    >
       <span>{t('app.footer.language')}:</span>
       <select
         value={i18n.resolvedLanguage}
@@ -14,7 +24,7 @@ export function LanguageSelector() {
           color: 'var(--text-primary)',
           border: '1px solid var(--border-color)',
           borderRadius: '4px',
-          padding: '4px 8px'
+          padding: '4px 8px',
         }}
       >
         <option value="en">English</option>

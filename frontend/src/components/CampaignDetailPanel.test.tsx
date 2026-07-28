@@ -49,7 +49,4 @@ const mockCampaign: Campaign = {
   metadata: {},
 };
 
-describe('CampaignDetailPanel', () => {
-
-  });
-});
+describe('CampaignDetailPanel', () => {});
