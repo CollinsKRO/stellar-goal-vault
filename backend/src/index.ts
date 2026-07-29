@@ -354,7 +354,8 @@ app.get('/api/health/deep', applyRateLimit(1000), async (_req: Request, res: Res
   }
 });
 
-app.get('/api/campaigns', (req: Request, res: Response) => {
+app.get('/api/campaigns', async (req: Request, res: Response, next: express.NextFunction) => {
+  try {
   const queryResult = parseCampaignListQuery(req.query as Record<string, unknown>);
   if (!queryResult.ok) {
     sendValidationError(queryResult.issues);
@@ -369,10 +370,10 @@ app.get('/api/campaigns', (req: Request, res: Response) => {
     .join('&');
   const cacheKey = buildCampaignCacheKey(qs);
 
-  const cached = getCampaignCacheEntry(cacheKey);
+  const cached = await getCampaignCacheEntry(cacheKey);
   if (cached) {
     const cachedData = JSON.parse(cached);
-    res.setHeader('Cache-Control', 'max-age=5');
+    res.setHeader('Cache-Control', 'max-age=30');
     res.setHeader('X-Cache', 'HIT');
     res.setHeader('X-Total-Count', String(cachedData.pagination.total));
     res.setHeader('Content-Type', 'application/json');
@@ -419,27 +420,50 @@ app.get('/api/campaigns', (req: Request, res: Response) => {
     },
   });
 
-  setCampaignCacheEntry(cacheKey, responseBody);
+  await setCampaignCacheEntry(cacheKey, responseBody);
 
-  res.setHeader('Cache-Control', 'max-age=5');
+  res.setHeader('Cache-Control', 'max-age=30');
   res.setHeader('X-Cache', 'MISS');
   res.setHeader('X-Total-Count', String(totalCount));
   res.setHeader('Content-Type', 'application/json');
   res.send(responseBody);
+  } catch (error) {
+    next(error);
+  }
 });
 
-app.get('/api/campaigns/:id', (req: Request, res: Response) => {
-  const parsedId = parseCampaignId(req.params.id);
-  if (!parsedId.ok) {
-    sendValidationError(parsedId.issues);
-  }
+app.get('/api/campaigns/:id', async (req: Request, res: Response, next: express.NextFunction) => {
+  try {
+    const parsedId = parseCampaignId(req.params.id);
+    if (!parsedId.ok) {
+      sendValidationError(parsedId.issues);
+    }
 
-  const campaign = getCampaignWithProgress(parsedId.value, CAMPAIGN_DETAIL_PLEDGE_PREVIEW_LIMIT);
-  if (!campaign) {
-    throw new AppError('Campaign not found.', 404, 'NOT_FOUND');
-  }
+    const cacheKey = `campaigns:detail:${parsedId.value}`;
+    const cached = await getCampaignCacheEntry(cacheKey);
+    if (cached) {
+      res.setHeader('Cache-Control', 'max-age=30');
+      res.setHeader('X-Cache', 'HIT');
+      res.setHeader('Content-Type', 'application/json');
+      res.send(cached);
+      return;
+    }
 
-  res.json({ data: campaign });
+    const campaign = getCampaignWithProgress(parsedId.value, CAMPAIGN_DETAIL_PLEDGE_PREVIEW_LIMIT);
+    if (!campaign) {
+      throw new AppError('Campaign not found.', 404, 'NOT_FOUND');
+    }
+
+    const responseBody = JSON.stringify({ data: campaign });
+    await setCampaignCacheEntry(cacheKey, responseBody);
+
+    res.setHeader('Cache-Control', 'max-age=30');
+    res.setHeader('X-Cache', 'MISS');
+    res.setHeader('Content-Type', 'application/json');
+    res.send(responseBody);
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.get('/api/campaigns/:id/pledges', (req: Request, res: Response) => {
@@ -485,7 +509,8 @@ app.get('/api/campaigns/:id/pledges', (req: Request, res: Response) => {
 app.post(
   '/api/campaigns',
   validateBody(createCampaignPayloadSchema),
-  (req: Request, res: Response) => {
+  async (req: Request, res: Response, next: express.NextFunction) => {
+    try {
     const body = req.body as z.infer<typeof createCampaignPayloadSchema>;
 
     if (body.deadline <= Math.floor(Date.now() / 1000)) {
@@ -500,8 +525,11 @@ app.post(
     };
 
     const campaign = createCampaign(campaignInput);
-    invalidateCampaignCache();
+    await invalidateCampaignCache();
     res.status(201).json({ data: { ...campaign, progress: calculateProgress(campaign) } });
+    } catch (error) {
+      next(error);
+    }
   },
 );
 
@@ -509,7 +537,8 @@ app.post(
   '/api/campaigns/:id/pledges',
   applyRateLimit(WRITE_RATE_LIMIT_MAX_REQUESTS),
   validateBody(createPledgePayloadSchema),
-  (req: Request, res: Response) => {
+  async (req: Request, res: Response, next: express.NextFunction) => {
+    try {
     const parsedId = parseCampaignId(req.params.id);
     if (!parsedId.ok) {
       sendValidationError(parsedId.issues);
@@ -517,8 +546,11 @@ app.post(
 
     const body = req.body as z.infer<typeof createPledgePayloadSchema>;
     const campaign = addPledge(parsedId.value, body);
-    invalidateCampaignCache();
+    await invalidateCampaignCache();
     res.status(201).json({ data: { ...campaign, progress: calculateProgress(campaign) } });
+    } catch (error) {
+      next(error);
+    }
   },
 );
 
@@ -526,19 +558,25 @@ app.post(
   '/api/campaigns/:id/pledges/reconcile',
   applyRateLimit(WRITE_RATE_LIMIT_MAX_REQUESTS),
   validateBody(reconcilePledgePayloadSchema),
-  (req: Request, res: Response) => {
+  async (req: Request, res: Response, next: express.NextFunction) => {
+    try {
     const parsedId = parseCampaignId(req.params.id);
     if (!parsedId.ok) {
       sendValidationError(parsedId.issues);
     }
 
+    const body = req.body as z.infer<typeof reconcilePledgePayloadSchema>;
+    const result = reconcileOnChainPledge(parsedId.value, body);
 
-    invalidateCampaignCache();
+    await invalidateCampaignCache();
     res.status(result.existing ? 200 : 201).json({
       data: {
 
       },
     });
+    } catch (error) {
+      next(error);
+    }
   },
 );
 
@@ -546,7 +584,8 @@ app.post(
   '/api/campaigns/:id/claim',
   applyRateLimit(WRITE_RATE_LIMIT_MAX_REQUESTS),
   validateBody(claimCampaignPayloadSchema),
-  (req: Request, res: Response) => {
+  async (req: Request, res: Response, next: express.NextFunction) => {
+    try {
     const parsedId = parseCampaignId(req.params.id);
     if (!parsedId.ok) {
       sendValidationError(parsedId.issues);
@@ -558,8 +597,11 @@ app.post(
       transactionHash: body.transactionHash,
       confirmedAt: body.confirmedAt,
     });
-    invalidateCampaignCache();
+    await invalidateCampaignCache();
     res.json({ data: { ...campaign, progress: calculateProgress(campaign) } });
+    } catch (error) {
+      next(error);
+    }
   },
 );
 
@@ -585,7 +627,7 @@ app.post(
         latestLedger: verified.latestLedger ?? body.soroban.latestLedger,
         source: 'soroban-contract',
       });
-      invalidateCampaignCache();
+      await invalidateCampaignCache();
 
       res.json({
         data: {
