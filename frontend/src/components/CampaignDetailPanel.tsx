@@ -1,13 +1,14 @@
 
 
 import { FormEvent, useState, useEffect, useCallback } from 'react';
-import { MousePointer2, Share2, Download, Link } from 'lucide-react';
+import { MousePointer2, Download, Link } from 'lucide-react';
 import { Campaign, AppConfig } from '../types/campaign';
 import CopyButton from './CopyButton';
 import { AddressAvatar } from './AddressAvatar';
 import { EmptyState } from './EmptyState';
 import { ContributorSummary } from './ContributorSummary';
 import { CampaignImage } from './CampaignImage';
+import { Countdown } from './Countdown';
 import { useCampaignShareCard } from './CampaignShareCard';
 import { useToast } from '../hooks/useToast';
 
@@ -261,6 +262,10 @@ export function CampaignDetailPanel({
         <article className="detail-stat">
           <span>Active pledges</span>
           <strong>{activeCampaign.progress.pledgeCount}</strong>
+        </article>
+        <article className="detail-stat">
+          <span>Time left</span>
+          <strong><Countdown deadline={activeCampaign.deadline} /></strong>
         </article>
       </div>
 
