@@ -37,6 +37,10 @@ jobs:
         working-directory: backend
         run: npm test
 
+      - name: Check generated OpenAPI specification is current
+        working-directory: backend
+        run: npm run check:openapi
+
       - name: Validate OpenAPI specification
         working-directory: backend
         run: npm run validate:openapi

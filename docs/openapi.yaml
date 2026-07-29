@@ -8,7 +8,15 @@ servers:
     description: Local development server
   - url: /
     description: Relative server URL
+security:
+  - bearerAuth: []
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: API key
+      description: Use the API key as a Bearer token in the Authorization header.
   schemas:
     Campaign:
       type: object
@@ -16,7 +24,7 @@ components:
         id:
           type: string
           description: Numeric campaign identifier.
-          example: '1'
+          example: "1"
         creator:
           type: string
           pattern: ^G[A-Z2-7]{55}$
@@ -45,42 +53,36 @@ components:
           example: USDC
         targetAmount:
           type: number
-          minimum: 0
-          exclusiveMinimum: true
+          exclusiveMinimum: 0
           example: 1000
         pledgedAmount:
           type: number
           example: 455
         deadline:
           type: integer
-          minimum: 0
-          exclusiveMinimum: true
+          exclusiveMinimum: 0
           description: Unix timestamp in seconds.
-          example: 1785387205
+          example: 1735689600
         createdAt:
           type: integer
-          minimum: 0
-          exclusiveMinimum: true
+          exclusiveMinimum: 0
           description: Unix timestamp in seconds.
-          example: 1785387205
+          example: 1735689600
         claimedAt:
           type: integer
-          minimum: 0
-          exclusiveMinimum: true
+          exclusiveMinimum: 0
           description: Unix timestamp in seconds.
-          example: 1785387205
+          example: 1735689600
         failedAt:
           type: integer
-          minimum: 0
-          exclusiveMinimum: true
+          exclusiveMinimum: 0
           description: Unix timestamp in seconds.
-          example: 1785387205
+          example: 1735689600
         deletedAt:
           type: integer
-          minimum: 0
-          exclusiveMinimum: true
+          exclusiveMinimum: 0
           description: Unix timestamp in seconds.
-          example: 1785387205
+          example: 1735689600
         metadata:
           type: object
           properties:
@@ -93,8 +95,7 @@ components:
           description: Optional campaign media / link metadata.
         maxPerContributor:
           type: integer
-          minimum: 0
-          exclusiveMinimum: true
+          exclusiveMinimum: 0
           example: 500
         tokenBalances:
           type: object
@@ -104,7 +105,7 @@ components:
             USDC: 455
             XLM: 0
         progress:
-          $ref: '#/components/schemas/CampaignProgress'
+          $ref: "#/components/schemas/CampaignProgress"
         pledges:
           type: array
           items:
@@ -121,8 +122,7 @@ components:
                 example: GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
               amount:
                 type: number
-                minimum: 0
-                exclusiveMinimum: true
+                exclusiveMinimum: 0
               assetCode:
                 type: string
                 pattern: ^[A-Z0-9]{1,12}$
@@ -130,16 +130,14 @@ components:
                 example: USDC
               createdAt:
                 type: integer
-                minimum: 0
-                exclusiveMinimum: true
+                exclusiveMinimum: 0
                 description: Unix timestamp in seconds.
-                example: 1785387205
+                example: 1735689600
               refundedAt:
                 type: integer
-                minimum: 0
-                exclusiveMinimum: true
+                exclusiveMinimum: 0
                 description: Unix timestamp in seconds.
-                example: 1785387205
+                example: 1735689600
               transactionHash:
                 type: string
             required:
@@ -211,7 +209,7 @@ components:
           example: 1
         campaignId:
           type: string
-          example: '1'
+          example: "1"
         contributor:
           type: string
           pattern: ^G[A-Z2-7]{55}$
@@ -219,8 +217,7 @@ components:
           example: GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
         amount:
           type: number
-          minimum: 0
-          exclusiveMinimum: true
+          exclusiveMinimum: 0
           example: 50
         assetCode:
           type: string
@@ -229,16 +226,14 @@ components:
           example: USDC
         createdAt:
           type: integer
-          minimum: 0
-          exclusiveMinimum: true
+          exclusiveMinimum: 0
           description: Unix timestamp in seconds.
-          example: 1785387205
+          example: 1735689600
         refundedAt:
           type: integer
-          minimum: 0
-          exclusiveMinimum: true
+          exclusiveMinimum: 0
           description: Unix timestamp in seconds.
-          example: 1785387205
+          example: 1735689600
         transactionHash:
           type: string
       required:
@@ -256,7 +251,7 @@ components:
           example: 1
         campaignId:
           type: string
-          example: '1'
+          example: "1"
         eventType:
           type: string
           enum:
@@ -270,10 +265,9 @@ components:
           example: pledged
         timestamp:
           type: integer
-          minimum: 0
-          exclusiveMinimum: true
+          exclusiveMinimum: 0
           description: Unix timestamp in seconds.
-          example: 1785387205
+          example: 1735689600
         actor:
           type: string
           pattern: ^G[A-Z2-7]{55}$
@@ -281,13 +275,11 @@ components:
           example: GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
         amount:
           type: number
-          minimum: 0
-          exclusiveMinimum: true
+          exclusiveMinimum: 0
           example: 50
         metadata:
           type: object
-          additionalProperties:
-            nullable: true
+          additionalProperties: {}
         blockchainMetadata:
           type: object
           properties:
@@ -430,12 +422,10 @@ components:
           minItems: 1
         targetAmount:
           type: number
-          minimum: 0
-          exclusiveMinimum: true
+          exclusiveMinimum: 0
         deadline:
           type: integer
-          minimum: 0
-          exclusiveMinimum: true
+          exclusiveMinimum: 0
         metadata:
           type: object
           properties:
@@ -446,8 +436,9 @@ components:
               type: string
               maxLength: 2048
         maxPerContributor:
-          type: integer
-          nullable: true
+          type:
+            - integer
+            - "null"
           minimum: 0
       required:
         - creator
@@ -464,8 +455,7 @@ components:
           pattern: ^G[A-Z2-7]{55}$
         amount:
           type: number
-          minimum: 0
-          exclusiveMinimum: true
+          exclusiveMinimum: 0
         assetCode:
           type: string
           pattern: ^[A-Za-z0-9]{1,12}$
@@ -481,8 +471,7 @@ components:
           pattern: ^G[A-Z2-7]{55}$
         amount:
           type: number
-          minimum: 0
-          exclusiveMinimum: true
+          exclusiveMinimum: 0
         assetCode:
           type: string
           pattern: ^[A-Za-z0-9]{1,12}$
@@ -491,8 +480,7 @@ components:
           pattern: ^[A-Fa-f0-9]{64}$
         confirmedAt:
           type: integer
-          minimum: 0
-          exclusiveMinimum: true
+          exclusiveMinimum: 0
       required:
         - contributor
         - amount
@@ -509,8 +497,7 @@ components:
           pattern: ^[A-Fa-f0-9]{64}$
         confirmedAt:
           type: integer
-          minimum: 0
-          exclusiveMinimum: true
+          exclusiveMinimum: 0
       required:
         - creator
         - transactionHash
@@ -540,16 +527,13 @@ components:
               pattern: ^G[A-Z2-7]{55}$
             ledger:
               type: integer
-              minimum: 0
-              exclusiveMinimum: true
+              exclusiveMinimum: 0
             createdAt:
               type: integer
-              minimum: 0
-              exclusiveMinimum: true
+              exclusiveMinimum: 0
             latestLedger:
               type: integer
-              minimum: 0
-              exclusiveMinimum: true
+              exclusiveMinimum: 0
           required:
             - txHash
             - contractId
@@ -565,7 +549,7 @@ components:
         data:
           type: array
           items:
-            $ref: '#/components/schemas/Campaign'
+            $ref: "#/components/schemas/Campaign"
         pagination:
           type: object
           properties:
@@ -597,7 +581,7 @@ components:
       type: object
       properties:
         data:
-          $ref: '#/components/schemas/Campaign'
+          $ref: "#/components/schemas/Campaign"
       required:
         - data
     PledgeListResponse:
@@ -606,7 +590,7 @@ components:
         data:
           type: array
           items:
-            $ref: '#/components/schemas/Pledge'
+            $ref: "#/components/schemas/Pledge"
         pagination:
           type: object
           properties:
@@ -638,7 +622,7 @@ components:
       type: object
       properties:
         data:
-          $ref: '#/components/schemas/Campaign'
+          $ref: "#/components/schemas/Campaign"
       required:
         - data
     ReconcileResponse:
@@ -648,7 +632,7 @@ components:
           type: object
           properties:
             campaign:
-              $ref: '#/components/schemas/Campaign'
+              $ref: "#/components/schemas/Campaign"
             transactionHash:
               type: string
               pattern: ^[A-Fa-f0-9]{64}$
@@ -668,7 +652,7 @@ components:
             id:
               type: string
               description: Numeric campaign identifier.
-              example: '1'
+              example: "1"
             creator:
               type: string
               pattern: ^G[A-Z2-7]{55}$
@@ -695,42 +679,36 @@ components:
               example: USDC
             targetAmount:
               type: number
-              minimum: 0
-              exclusiveMinimum: true
+              exclusiveMinimum: 0
               example: 1000
             pledgedAmount:
               type: number
               example: 455
             deadline:
               type: integer
-              minimum: 0
-              exclusiveMinimum: true
+              exclusiveMinimum: 0
               description: Unix timestamp in seconds.
-              example: 1785387205
+              example: 1735689600
             createdAt:
               type: integer
-              minimum: 0
-              exclusiveMinimum: true
+              exclusiveMinimum: 0
               description: Unix timestamp in seconds.
-              example: 1785387205
+              example: 1735689600
             claimedAt:
               type: integer
-              minimum: 0
-              exclusiveMinimum: true
+              exclusiveMinimum: 0
               description: Unix timestamp in seconds.
-              example: 1785387205
+              example: 1735689600
             failedAt:
               type: integer
-              minimum: 0
-              exclusiveMinimum: true
+              exclusiveMinimum: 0
               description: Unix timestamp in seconds.
-              example: 1785387205
+              example: 1735689600
             deletedAt:
               type: integer
-              minimum: 0
-              exclusiveMinimum: true
+              exclusiveMinimum: 0
               description: Unix timestamp in seconds.
-              example: 1785387205
+              example: 1735689600
             metadata:
               type: object
               properties:
@@ -743,8 +721,7 @@ components:
               description: Optional campaign media / link metadata.
             maxPerContributor:
               type: integer
-              minimum: 0
-              exclusiveMinimum: true
+              exclusiveMinimum: 0
               example: 500
             tokenBalances:
               type: object
@@ -752,7 +729,7 @@ components:
                 type: number
               example: *a2
             progress:
-              $ref: '#/components/schemas/CampaignProgress'
+              $ref: "#/components/schemas/CampaignProgress"
             pledges:
               type: array
               items:
@@ -769,8 +746,7 @@ components:
                     example: GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
                   amount:
                     type: number
-                    minimum: 0
-                    exclusiveMinimum: true
+                    exclusiveMinimum: 0
                   assetCode:
                     type: string
                     pattern: ^[A-Z0-9]{1,12}$
@@ -778,16 +754,14 @@ components:
                     example: USDC
                   createdAt:
                     type: integer
-                    minimum: 0
-                    exclusiveMinimum: true
+                    exclusiveMinimum: 0
                     description: Unix timestamp in seconds.
-                    example: 1785387205
+                    example: 1735689600
                   refundedAt:
                     type: integer
-                    minimum: 0
-                    exclusiveMinimum: true
+                    exclusiveMinimum: 0
                     description: Unix timestamp in seconds.
-                    example: 1785387205
+                    example: 1735689600
                   transactionHash:
                     type: string
                 required:
@@ -822,7 +796,7 @@ components:
         data:
           type: array
           items:
-            $ref: '#/components/schemas/ContributorSummary'
+            $ref: "#/components/schemas/ContributorSummary"
       required:
         - data
     CampaignHistoryResponse:
@@ -831,7 +805,7 @@ components:
         data:
           type: array
           items:
-            $ref: '#/components/schemas/CampaignEvent'
+            $ref: "#/components/schemas/CampaignEvent"
         total:
           type: integer
         page:
@@ -1026,7 +1000,7 @@ components:
         data:
           type: array
           items:
-            $ref: '#/components/schemas/LeaderboardEntry'
+            $ref: "#/components/schemas/LeaderboardEntry"
       required:
         - data
     LeaderboardEntry:
@@ -1057,7 +1031,7 @@ components:
         data:
           type: array
           items:
-            $ref: '#/components/schemas/OpenIssue'
+            $ref: "#/components/schemas/OpenIssue"
       required:
         - data
   parameters: {}
@@ -1067,38 +1041,40 @@ paths:
       tags:
         - Health
       summary: Basic health check
+      security: []
       responses:
-        '200':
+        "200":
           description: Service is healthy
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/HealthResponse'
-        '503':
+                $ref: "#/components/schemas/HealthResponse"
+        "503":
           description: Service is degraded
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/HealthResponse'
+                $ref: "#/components/schemas/HealthResponse"
   /api/health/deep:
     get:
       tags:
         - Health
       summary: Deep health check
       description: Checks database, Soroban RPC, and contract configuration health.
+      security: []
       responses:
-        '200':
+        "200":
           description: All components are healthy
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DeepHealthResponse'
-        '503':
+                $ref: "#/components/schemas/DeepHealthResponse"
+        "503":
           description: One or more components are unhealthy
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DeepHealthResponse'
+                $ref: "#/components/schemas/DeepHealthResponse"
   /api/campaigns:
     get:
       tags:
@@ -1175,8 +1151,8 @@ paths:
         - schema:
             type: string
             enum:
-              - 'true'
-              - 'false'
+              - "true"
+              - "false"
           required: false
           name: includeDeleted
           in: query
@@ -1197,18 +1173,18 @@ paths:
           name: createdBefore
           in: query
       responses:
-        '200':
+        "200":
           description: Paginated list of campaigns
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CampaignListResponse'
-        '400':
+                $ref: "#/components/schemas/CampaignListResponse"
+        "400":
           description: Validation error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiError'
+                $ref: "#/components/schemas/ApiError"
     post:
       tags:
         - Campaigns
@@ -1218,20 +1194,20 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CreateCampaignPayload'
+              $ref: "#/components/schemas/CreateCampaignPayload"
       responses:
-        '201':
+        "201":
           description: Campaign created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CampaignDetailResponse'
-        '400':
+                $ref: "#/components/schemas/CampaignDetailResponse"
+        "400":
           description: Validation error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiError'
+                $ref: "#/components/schemas/ApiError"
   /api/campaigns/{id}:
     get:
       tags:
@@ -1241,29 +1217,29 @@ paths:
         - schema:
             type: string
             pattern: ^[1-9]\d*$
-            example: '1'
+            example: "1"
           required: true
           name: id
           in: path
       responses:
-        '200':
+        "200":
           description: Campaign details
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CampaignDetailResponse'
-        '400':
+                $ref: "#/components/schemas/CampaignDetailResponse"
+        "400":
           description: Validation error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiError'
-        '404':
+                $ref: "#/components/schemas/ApiError"
+        "404":
           description: Resource not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiError'
+                $ref: "#/components/schemas/ApiError"
   /api/campaigns/{id}/pledges:
     get:
       tags:
@@ -1273,7 +1249,7 @@ paths:
         - schema:
             type: string
             pattern: ^[1-9]\d*$
-            example: '1'
+            example: "1"
           required: true
           name: id
           in: path
@@ -1291,24 +1267,24 @@ paths:
           name: limit
           in: query
       responses:
-        '200':
+        "200":
           description: Paginated list of pledges
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PledgeListResponse'
-        '400':
+                $ref: "#/components/schemas/PledgeListResponse"
+        "400":
           description: Validation error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiError'
-        '404':
+                $ref: "#/components/schemas/ApiError"
+        "404":
           description: Resource not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiError'
+                $ref: "#/components/schemas/ApiError"
     post:
       tags:
         - Pledges
@@ -1317,7 +1293,7 @@ paths:
         - schema:
             type: string
             pattern: ^[1-9]\d*$
-            example: '1'
+            example: "1"
           required: true
           name: id
           in: path
@@ -1326,27 +1302,27 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CreatePledgePayload'
+              $ref: "#/components/schemas/CreatePledgePayload"
       responses:
-        '201':
+        "201":
           description: Pledge recorded
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PledgeResponse'
-        '400':
+                $ref: "#/components/schemas/PledgeResponse"
+        "400":
           description: Validation error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiError'
-        '404':
+                $ref: "#/components/schemas/ApiError"
+        "404":
           description: Resource not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiError'
-        '429':
+                $ref: "#/components/schemas/ApiError"
+        "429":
           description: Rate limit exceeded
   /api/campaigns/{id}/pledges/reconcile:
     post:
@@ -1359,7 +1335,7 @@ paths:
         - schema:
             type: string
             pattern: ^[1-9]\d*$
-            example: '1'
+            example: "1"
           required: true
           name: id
           in: path
@@ -1368,27 +1344,27 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ReconcilePledgePayload'
+              $ref: "#/components/schemas/ReconcilePledgePayload"
       responses:
-        '201':
+        "201":
           description: Pledge reconciled
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ReconcileResponse'
-        '400':
+                $ref: "#/components/schemas/ReconcileResponse"
+        "400":
           description: Validation error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiError'
-        '404':
+                $ref: "#/components/schemas/ApiError"
+        "404":
           description: Resource not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiError'
-        '429':
+                $ref: "#/components/schemas/ApiError"
+        "429":
           description: Rate limit exceeded
   /api/campaigns/{id}/claim:
     post:
@@ -1400,7 +1376,7 @@ paths:
         - schema:
             type: string
             pattern: ^[1-9]\d*$
-            example: '1'
+            example: "1"
           required: true
           name: id
           in: path
@@ -1409,27 +1385,27 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ClaimCampaignPayload'
+              $ref: "#/components/schemas/ClaimCampaignPayload"
       responses:
-        '200':
+        "200":
           description: Campaign claimed
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CampaignDetailResponse'
-        '400':
+                $ref: "#/components/schemas/CampaignDetailResponse"
+        "400":
           description: Validation error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiError'
-        '404':
+                $ref: "#/components/schemas/ApiError"
+        "404":
           description: Resource not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiError'
-        '429':
+                $ref: "#/components/schemas/ApiError"
+        "429":
           description: Rate limit exceeded
   /api/campaigns/{id}/refund:
     post:
@@ -1442,7 +1418,7 @@ paths:
         - schema:
             type: string
             pattern: ^[1-9]\d*$
-            example: '1'
+            example: "1"
           required: true
           name: id
           in: path
@@ -1451,27 +1427,27 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/RefundPayload'
+              $ref: "#/components/schemas/RefundPayload"
       responses:
-        '200':
+        "200":
           description: Refund processed
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RefundResponse'
-        '400':
+                $ref: "#/components/schemas/RefundResponse"
+        "400":
           description: Validation error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiError'
-        '404':
+                $ref: "#/components/schemas/ApiError"
+        "404":
           description: Resource not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiError'
-        '429':
+                $ref: "#/components/schemas/ApiError"
+        "429":
           description: Rate limit exceeded
   /api/campaigns/{id}/contributors:
     get:
@@ -1482,29 +1458,29 @@ paths:
         - schema:
             type: string
             pattern: ^[1-9]\d*$
-            example: '1'
+            example: "1"
           required: true
           name: id
           in: path
       responses:
-        '200':
+        "200":
           description: Contributor summary
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ContributorSummaryResponse'
-        '400':
+                $ref: "#/components/schemas/ContributorSummaryResponse"
+        "400":
           description: Validation error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiError'
-        '404':
+                $ref: "#/components/schemas/ApiError"
+        "404":
           description: Resource not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiError'
+                $ref: "#/components/schemas/ApiError"
   /api/campaigns/{id}/history:
     get:
       tags:
@@ -1514,7 +1490,7 @@ paths:
         - schema:
             type: string
             pattern: ^[1-9]\d*$
-            example: '1'
+            example: "1"
           required: true
           name: id
           in: path
@@ -1532,96 +1508,101 @@ paths:
           name: pageSize
           in: query
       responses:
-        '200':
+        "200":
           description: Campaign event history
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CampaignHistoryResponse'
-        '400':
+                $ref: "#/components/schemas/CampaignHistoryResponse"
+        "400":
           description: Validation error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiError'
-        '404':
+                $ref: "#/components/schemas/ApiError"
+        "404":
           description: Resource not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiError'
+                $ref: "#/components/schemas/ApiError"
   /api/open-issues:
     get:
       tags:
         - Misc
       summary: List open issues
+      security: []
       responses:
-        '200':
+        "200":
           description: List of open development issues
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OpenIssuesResponse'
+                $ref: "#/components/schemas/OpenIssuesResponse"
   /api/config:
     get:
       tags:
         - Misc
       summary: Get runtime configuration
+      security: []
       responses:
-        '200':
+        "200":
           description: Runtime configuration
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ConfigResponse'
+                $ref: "#/components/schemas/ConfigResponse"
   /api/stats:
     get:
       tags:
         - Misc
       summary: Get global statistics
+      security: []
       responses:
-        '200':
+        "200":
           description: Global campaign and pledge statistics
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StatsResponse'
+                $ref: "#/components/schemas/StatsResponse"
   /api/docs:
     get:
       tags:
         - Docs
       summary: Open Swagger UI
       description: Development-only interactive documentation for this API.
+      security: []
       responses:
-        '200':
+        "200":
           description: Swagger UI HTML
           content:
             text/html:
               schema:
                 type: string
-        '401':
-          description: Production requests require API key authentication
+        "404":
+          description: Swagger UI is disabled in production
   /api/openapi.json:
     get:
       tags:
         - Docs
       summary: Get the OpenAPI specification
       description: Returns the machine-readable OpenAPI 3.1 specification for this API.
+      security: []
       responses:
-        '200':
+        "200":
           description: OpenAPI JSON spec
           content:
             application/json:
               schema:
                 type: object
                 properties: {}
-                additionalProperties:
-                  nullable: true
+                additionalProperties: {}
   /api/leaderboard:
     get:
       tags:
         - Misc
       summary: Get contributor leaderboard
+      security: []
       parameters:
         - schema:
             type: integer
@@ -1634,15 +1615,16 @@ paths:
           name: limit
           in: query
       responses:
-        '200':
+        "200":
           description: Leaderboard
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LeaderboardResponse'
-        '500':
+                $ref: "#/components/schemas/LeaderboardResponse"
+        "500":
           description: Internal server error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiError'
+                $ref: "#/components/schemas/ApiError"
+webhooks: {}

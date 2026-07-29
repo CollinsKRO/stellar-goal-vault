@@ -1,6 +1,6 @@
 import {
   OpenAPIRegistry,
-  OpenApiGeneratorV3,
+  OpenApiGeneratorV31,
   extendZodWithOpenApi,
 } from '@asteasolutions/zod-to-openapi';
 import { z } from 'zod';
@@ -17,6 +17,12 @@ import {
 extendZodWithOpenApi(z);
 
 const registry = new OpenAPIRegistry();
+const bearerAuth = registry.registerComponent('securitySchemes', 'bearerAuth', {
+  type: 'http',
+  scheme: 'bearer',
+  bearerFormat: 'API key',
+  description: 'Use the API key as a Bearer token in the Authorization header.',
+});
 
 // ---------------------------------------------------------------------------
 // Shared primitive schemas
@@ -43,14 +49,10 @@ const txHashSchema = z
     example: 'a'.repeat(64),
   });
 
-const unixTimestampSchema = z
-  .number()
-  .int()
-  .positive()
-  .openapi({
-    description: 'Unix timestamp in seconds.',
-    example: Math.floor(Date.now() / 1000) + 86400,
-  });
+const unixTimestampSchema = z.number().int().positive().openapi({
+  description: 'Unix timestamp in seconds.',
+  example: 1735689600,
+});
 
 const paginationSchema = z.object({
   total: z
@@ -429,6 +431,7 @@ registry.registerPath({
   path: '/api/health',
   tags: ['Health'],
   summary: 'Basic health check',
+  security: [],
   responses: {
     200: {
       description: 'Service is healthy',
@@ -447,6 +450,7 @@ registry.registerPath({
   tags: ['Health'],
   summary: 'Deep health check',
   description: 'Checks database, Soroban RPC, and contract configuration health.',
+  security: [],
   responses: {
     200: {
       description: 'All components are healthy',
@@ -705,6 +709,7 @@ registry.registerPath({
   path: '/api/open-issues',
   tags: ['Misc'],
   summary: 'List open issues',
+  security: [],
   responses: {
     200: {
       description: 'List of open development issues',
@@ -718,6 +723,7 @@ registry.registerPath({
   path: '/api/config',
   tags: ['Misc'],
   summary: 'Get runtime configuration',
+  security: [],
   responses: {
     200: {
       description: 'Runtime configuration',
@@ -731,6 +737,7 @@ registry.registerPath({
   path: '/api/stats',
   tags: ['Misc'],
   summary: 'Get global statistics',
+  security: [],
   responses: {
     200: {
       description: 'Global campaign and pledge statistics',
@@ -745,12 +752,13 @@ registry.registerPath({
   tags: ['Docs'],
   summary: 'Open Swagger UI',
   description: 'Development-only interactive documentation for this API.',
+  security: [],
   responses: {
     200: {
       description: 'Swagger UI HTML',
       content: { 'text/html': { schema: { type: 'string' } } },
     },
-    401: { description: 'Production requests require API key authentication' },
+    404: { description: 'Swagger UI is disabled in production' },
   },
 });
 
@@ -760,6 +768,7 @@ registry.registerPath({
   tags: ['Docs'],
   summary: 'Get the OpenAPI specification',
   description: 'Returns the machine-readable OpenAPI 3.1 specification for this API.',
+  security: [],
   responses: {
     200: {
       description: 'OpenAPI JSON spec',
@@ -773,6 +782,7 @@ registry.registerPath({
   path: '/api/leaderboard',
   tags: ['Misc'],
   summary: 'Get contributor leaderboard',
+  security: [],
   request: {
     query: z.object({
       limit: z.coerce
@@ -801,7 +811,7 @@ registry.registerPath({
 // ---------------------------------------------------------------------------
 
 export function generateOpenApiDocument() {
-  const generator = new OpenApiGeneratorV3(registry.definitions);
+  const generator = new OpenApiGeneratorV31(registry.definitions);
   return generator.generateDocument({
     openapi: '3.1.0',
     info: {
@@ -813,6 +823,7 @@ export function generateOpenApiDocument() {
       { url: `http://localhost:${config.port}`, description: 'Local development server' },
       { url: '/', description: 'Relative server URL' },
     ],
+    security: [{ [bearerAuth.name]: [] }],
   });
 }
 

@@ -133,6 +133,10 @@ app.get('/api/openapi.json', (_req: Request, res: Response) => {
 if (process.env.NODE_ENV !== 'production') {
   app.get('/api/docs', swaggerUi.setup(openApiDocument, { explorer: true }));
   app.use('/api/docs', swaggerUi.serve);
+} else {
+  app.get('/api/docs', (_req: Request, res: Response) => {
+    res.sendStatus(404);
+  });
 }
 
 // Add API key authentication middleware (production only)
@@ -281,20 +285,21 @@ export function parseCampaignListFilters(query: {
       'INVALID_SORT_FIELD',
     );
   }
+  if (rawOrder && !VALID_ORDERS.includes(rawOrder as SortOrder)) {
+    throw new AppError(
+      `Invalid sort order: ${rawOrder}. Supported orders: ${VALID_ORDERS.join(', ')}`,
+      400,
+      'INVALID_SORT_ORDER',
+    );
+  }
 
   return {
     asset: normalizeAssetFilter(query.asset),
     status: normalizeStatusFilter(query.status),
     searchQuery: normalizeQueryValue(query.search) || normalizeQueryValue(query.q),
     includeDeleted: query.includeDeleted === 'true',
-    sort:
-      rawSort && VALID_SORT_FIELDS.includes(rawSort as CampaignSortField)
-        ? (rawSort as CampaignSortField)
-        : undefined,
-    order:
-      rawOrder && VALID_ORDERS.includes(rawOrder as SortOrder)
-        ? (rawOrder as SortOrder)
-        : undefined,
+    sort: rawSort as CampaignSortField | undefined,
+    order: rawOrder as SortOrder | undefined,
   };
 }
 
