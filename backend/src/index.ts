@@ -664,10 +664,18 @@ app.get('/api/config', (_req: Request, res: Response) => {
   });
 });
 
-app.get('/api/stats', cacheMiddleware(30), (_req: Request, res: Response) => {
+app.get('/api/stats', cacheMiddleware(60), (_req: Request, res: Response) => {
   const stats = getGlobalStats();
   res.json({
     data: {
+      total_campaigns: stats.totalCampaigns,
+      open_campaigns: stats.campaignCountByStatus.open,
+      funded_campaigns: stats.campaignCountByStatus.funded,
+      failed_campaigns: stats.campaignCountByStatus.failed,
+      total_pledged_usdc: stats.totalPledgedUsdc,
+      total_pledged_xlm: stats.totalPledgedXlm,
+      total_contributors: stats.totalContributors,
+      avg_funding_rate_pct: stats.avgFundingRatePct,
       totalCampaigns: stats.totalCampaigns,
       openCampaigns: stats.campaignCountByStatus.open,
       fundedCampaigns: stats.campaignCountByStatus.funded,
@@ -675,7 +683,7 @@ app.get('/api/stats', cacheMiddleware(30), (_req: Request, res: Response) => {
       failedCampaigns: stats.campaignCountByStatus.failed,
       totalPledgeVolume: stats.totalPledgedAmount,
       uniqueContributors: stats.totalContributors,
-    }
+    },
   });
 });
 

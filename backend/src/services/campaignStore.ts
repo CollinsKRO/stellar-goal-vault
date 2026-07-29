@@ -321,7 +321,10 @@ export interface GlobalStats {
   totalCampaigns: number;
   campaignCountByStatus: Record<CampaignStatus, number>;
   totalPledgedAmount: number;
+  totalPledgedUsdc: number;
+  totalPledgedXlm: number;
   totalContributors: number;
+  avgFundingRatePct: number;
   onChainCampaignCount?: number; // Total campaigns from contract
 }
 
@@ -951,7 +954,8 @@ export function getGlobalStats(at = nowInSeconds()): GlobalStats {
         SUM(CASE WHEN claimed_at IS NULL AND pledged_amount >= target_amount THEN 1 ELSE 0 END) AS funded_count,
         SUM(CASE WHEN claimed_at IS NULL AND pledged_amount < target_amount AND deadline <= ? THEN 1 ELSE 0 END) AS failed_count,
         SUM(CASE WHEN claimed_at IS NULL AND pledged_amount < target_amount AND deadline > ? THEN 1 ELSE 0 END) AS open_count,
-        COALESCE(SUM(pledged_amount), 0) AS total_pledged
+        COALESCE(SUM(pledged_amount), 0) AS total_pledged,
+        COALESCE(AVG(CASE WHEN target_amount > 0 THEN (pledged_amount / target_amount) * 100 ELSE 0 END), 0) AS avg_funding_rate_pct
       FROM campaigns`,
     )
     .get(at, at) as {
@@ -961,15 +965,23 @@ export function getGlobalStats(at = nowInSeconds()): GlobalStats {
     failed_count: number;
     open_count: number;
     total_pledged: number;
+    avg_funding_rate_pct: number;
   };
 
-  const contributorRow = db
+  const pledgeRow = db
     .prepare(
-      `SELECT COUNT(DISTINCT contributor) AS total_contributors
+      `SELECT
+        COUNT(DISTINCT contributor) AS total_contributors,
+        COALESCE(SUM(CASE WHEN UPPER(asset_code) = 'USDC' THEN amount ELSE 0 END), 0) AS total_usdc,
+        COALESCE(SUM(CASE WHEN UPPER(asset_code) = 'XLM' THEN amount ELSE 0 END), 0) AS total_xlm
        FROM pledges
        WHERE refunded_at IS NULL`,
     )
-    .get() as { total_contributors: number };
+    .get() as {
+    total_contributors: number;
+    total_usdc: number;
+    total_xlm: number;
+  };
 
   return {
     totalCampaigns: row.total_campaigns ?? 0,
@@ -980,7 +992,10 @@ export function getGlobalStats(at = nowInSeconds()): GlobalStats {
       failed: row.failed_count ?? 0,
     },
     totalPledgedAmount: round(row.total_pledged ?? 0),
-    totalContributors: contributorRow.total_contributors ?? 0,
+    totalPledgedUsdc: round(pledgeRow?.total_usdc ?? 0),
+    totalPledgedXlm: round(pledgeRow?.total_xlm ?? 0),
+    totalContributors: pledgeRow?.total_contributors ?? 0,
+    avgFundingRatePct: round(row.avg_funding_rate_pct ?? 0),
   };
 }
 

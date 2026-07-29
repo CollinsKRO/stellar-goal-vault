@@ -435,13 +435,14 @@ describe('GET /api/stats', () => {
     const res = await get('/api/stats');
     expect(res.status).toBe(200);
     expect(res.data.data).toMatchObject({
-      totalCampaigns: expect.any(Number),
-      openCampaigns: expect.any(Number),
-      fundedCampaigns: expect.any(Number),
-      claimedCampaigns: expect.any(Number),
-      failedCampaigns: expect.any(Number),
-      totalPledgeVolume: expect.any(Number),
-      uniqueContributors: expect.any(Number),
+      total_campaigns: expect.any(Number),
+      open_campaigns: expect.any(Number),
+      funded_campaigns: expect.any(Number),
+      failed_campaigns: expect.any(Number),
+      total_pledged_usdc: expect.any(Number),
+      total_pledged_xlm: expect.any(Number),
+      total_contributors: expect.any(Number),
+      avg_funding_rate_pct: expect.any(Number),
     });
   });
 });
