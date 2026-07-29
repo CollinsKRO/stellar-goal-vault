@@ -29,8 +29,8 @@ The migration path to PostgreSQL is preserved by:
 
 - Using standard SQL (CREATE TABLE, INSERT, SELECT, JOIN) without SQLite-specific extensions
 - Keeping transaction logic in the service layer rather than in database-specific triggers or stored procedures
-- Storing dates as ISO-8601 text (which both SQLite and PostgreSQL handle natively)
-- Avoiding PRAGMA statements in application code
+- Storing dates as UNIX epoch integers (which both SQLite and PostgreSQL handle natively)
+- Limiting PRAGMA usage to migration-safe schema introspection (column existence checks via `PRAGMA table_info`) rather than core application logic
 
 ## Consequences
 

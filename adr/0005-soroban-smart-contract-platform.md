@@ -27,11 +27,11 @@ Use **Soroban** as the smart contract platform.
 
 Soroban is Stellar's native smart contract platform. Contracts are written in Rust, compiled to WASM, and deployed to the Stellar network. The Stellar ecosystem provides tooling (`stellar CLI`, `@stellar/stellar-sdk`, Freighter wallet) that integrates directly with Soroban without adapters or bridges.
 
-The contract lives in `contracts/` and is invoked from the frontend via `@stellar/stellar-sdk` and `@stellar/freighter-api`. The backend stores the deployed `CONTRACT_ID` and `SOROBAN_RPC_URL` in environment variables and exposes them to the frontend through `/api/config`.
+The contract lives in `contracts/` and is compiled, deployed, and available for invocation. The **planned architecture** is for the frontend to invoke it via `@stellar/stellar-sdk` and `@stellar/freighter-api`. The backend stores the deployed `CONTRACT_ID` and `SOROBAN_RPC_URL` in environment variables and exposes them to the frontend through `/api/config`. As of this writing, the live wallet-signing flow is not yet fully wired into the frontend (see the README for current integration status).
 
 ## Consequences
 
-- **Direct Stellar asset access** — campaigns can accept any Stellar asset (USDC, XLM, PYUSD) without wrapping. The `token` address in `contribute` is a native Stellar contract ID.
+- **Direct Stellar asset access** — campaigns can accept any Stellar asset (USDC, XLM, PYUSD) without wrapping. The `token` parameter in `contribute` is a Soroban `Address` that identifies the token's on-chain contract. For classic Stellar assets, this is the Stellar Asset Contract (SAC) address, which must be deployed on the network before the asset can be accepted by a campaign. SAC deployment is a prerequisite for accepting classic Stellar assets in pledge flows.
 - **Rust-based development** — contract developers need Rust and `wasm32-unknown-unknown` target. The Rust toolchain is well-supported but adds a dependency for contributors who only work on frontend or backend.
 - **Small platform ecosystem** — Soroban has fewer third-party libraries, audited patterns, and tooling compared to EVM chains. Custom implementations are more common.
 - **Ecosystem alignment** — Freighter, Stellar RPC, and the Stellar testnet faucet all target Soroban first. Users and contributors from the Stellar community will be familiar with the stack.
