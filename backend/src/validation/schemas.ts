@@ -147,7 +147,7 @@ function singleCampaignListQueryParam(value: unknown): string | undefined {
 
 function parsePositiveIntegerQueryParam(
   value: unknown,
-
+  field: 'page' | 'limit' | 'pageSize',
   max?: number,
 ): { ok: true; value?: number } | { ok: false; issues: z.core.$ZodIssue[] } {
   const raw = singleCampaignListQueryParam(value);
