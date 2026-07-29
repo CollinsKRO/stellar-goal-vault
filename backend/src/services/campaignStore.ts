@@ -1262,3 +1262,223 @@ export function getTopContributors(limit: number = 10): LeaderboardEntry[] {
     averagePledgeAmount: round(row.avg_pledge),
   }));
 }
+
+// ---------------------------------------------------------------------------
+// Trending Campaigns
+// ---------------------------------------------------------------------------
+
+export interface TrendingCampaignEntry {
+  campaign: CampaignRecord;
+  progress: CampaignProgress;
+  pledgeVelocity: number; // pledges in last 24h / hours the campaign has been open
+  recentPledgeCount: number;
+}
+
+/**
+ * Returns top 10 open campaigns sorted by pledge velocity (pledges in last 24h / hours_open).
+ * Excludes funded, claimed, failed, and deleted campaigns.
+ */
+export function getTrendingCampaigns(limit = 10): TrendingCampaignEntry[] {
+  const db = getDb();
+  const now = nowInSeconds();
+  const window24h = now - 86400;
+
+  const rows = db
+    .prepare(
+      `SELECT
+         c.*,
+         COUNT(p.id) AS recent_pledge_count
+       FROM campaigns c
+       LEFT JOIN pledges p
+         ON p.campaign_id = c.id
+         AND p.refunded_at IS NULL
+         AND p.created_at >= ?
+       WHERE c.deleted_at IS NULL
+         AND c.claimed_at IS NULL
+         AND c.pledged_amount < c.target_amount
+         AND c.deadline > ?
+       GROUP BY c.id
+       ORDER BY recent_pledge_count DESC, c.pledged_amount DESC
+       LIMIT ?`,
+    )
+    .all(window24h, now, limit) as Array<CampaignRow & { recent_pledge_count: number }>;
+
+  return rows.map((row) => {
+    const { recent_pledge_count, ...campaignRow } = row;
+    const campaign = rowToCampaign(campaignRow as CampaignRow);
+    const hoursOpen = Math.max(1, (now - campaign.createdAt) / 3600);
+    const pledgeVelocity = Number((recent_pledge_count / hoursOpen).toFixed(4));
+
+    return {
+      campaign,
+      progress: calculateProgress(campaign, now),
+      pledgeVelocity,
+      recentPledgeCount: recent_pledge_count,
+    };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Campaign Comments
+// ---------------------------------------------------------------------------
+
+export interface CommentRecord {
+  id: number;
+  campaignId: string;
+  author: string;
+  content: string;
+  createdAt: number;
+  deletedAt?: number;
+}
+
+interface CommentRow {
+  id: number;
+  campaign_id: string;
+  author: string;
+  content: string;
+  created_at: number;
+  deleted_at: number | null;
+}
+
+function rowToComment(row: CommentRow): CommentRecord {
+  return {
+    id: row.id,
+    campaignId: row.campaign_id,
+    author: row.author,
+    content: row.deleted_at !== null ? '[deleted]' : row.content,
+    createdAt: row.created_at,
+    deletedAt: row.deleted_at ?? undefined,
+  };
+}
+
+export interface CreateCommentInput {
+  author: string;
+  content: string;
+}
+
+export interface ListCommentsOptions {
+  page: number;
+  limit: number;
+}
+
+export interface ListCommentsResult {
+  comments: CommentRecord[];
+  totalCount: number;
+}
+
+/**
+ * Creates a new comment on a campaign.
+ *
+ * @param campaignId - The ID of the campaign to comment on.
+ * @param input - `author` (Stellar address) and `content` (max 500 chars).
+ * @returns The newly created {@link CommentRecord}.
+ * @throws {ServiceError} 404 `NOT_FOUND` if the campaign does not exist.
+ */
+export function createComment(campaignId: string, input: CreateCommentInput): CommentRecord {
+  const db = getDb();
+  const campaign = getCampaign(campaignId);
+  if (!campaign) {
+    throw toServiceError('Campaign not found.', 404, 'NOT_FOUND');
+  }
+
+  const now = nowInSeconds();
+  const result = db
+    .prepare(
+      `INSERT INTO campaign_comments (campaign_id, author, content, created_at)
+       VALUES (?, ?, ?, ?)`,
+    )
+    .run(campaignId, input.author, input.content.trim(), now);
+
+  return {
+    id: Number(result.lastInsertRowid),
+    campaignId,
+    author: input.author,
+    content: input.content.trim(),
+    createdAt: now,
+  };
+}
+
+/**
+ * Returns a paginated list of comments for a campaign, newest first.
+ * Soft-deleted comments are included but their content is replaced with `[deleted]`.
+ *
+ * @param campaignId - The campaign to fetch comments for.
+ * @param options - `page` (1-based) and `limit` (records per page, default 20).
+ */
+export function listComments(
+  campaignId: string,
+  options: ListCommentsOptions,
+): ListCommentsResult {
+  const db = getDb();
+  const offset = (options.page - 1) * options.limit;
+
+  const { total } = db
+    .prepare(`SELECT COUNT(*) AS total FROM campaign_comments WHERE campaign_id = ?`)
+    .get(campaignId) as { total: number };
+
+  const rows = db
+    .prepare(
+      `SELECT * FROM campaign_comments
+       WHERE campaign_id = ?
+       ORDER BY created_at DESC, id DESC
+       LIMIT ? OFFSET ?`,
+    )
+    .all(campaignId, options.limit, offset) as CommentRow[];
+
+  return {
+    comments: rows.map(rowToComment),
+    totalCount: total,
+  };
+}
+
+/**
+ * Soft-deletes a comment. Only the campaign creator may delete any comment;
+ * the comment author may also delete their own comment.
+ *
+ * @param campaignId - The campaign the comment belongs to.
+ * @param commentId  - The comment to delete.
+ * @param requestor  - Stellar address of the person requesting deletion.
+ * @throws {ServiceError} 404 `NOT_FOUND` if the campaign or comment does not exist.
+ * @throws {ServiceError} 403 `FORBIDDEN` if the requestor is not allowed to delete.
+ * @throws {ServiceError} 409 `ALREADY_DELETED` if the comment is already soft-deleted.
+ */
+export function deleteComment(
+  campaignId: string,
+  commentId: number,
+  requestor: string,
+): void {
+  const db = getDb();
+
+  const campaign = getCampaign(campaignId);
+  if (!campaign) {
+    throw toServiceError('Campaign not found.', 404, 'NOT_FOUND');
+  }
+
+  const row = db
+    .prepare(`SELECT * FROM campaign_comments WHERE id = ? AND campaign_id = ?`)
+    .get(commentId, campaignId) as CommentRow | undefined;
+
+  if (!row) {
+    throw toServiceError('Comment not found.', 404, 'NOT_FOUND');
+  }
+
+  if (row.deleted_at !== null) {
+    throw toServiceError('Comment already deleted.', 409, 'ALREADY_DELETED');
+  }
+
+  const isCampaignCreator = campaign.creator === requestor;
+  const isCommentAuthor = row.author === requestor;
+
+  if (!isCampaignCreator && !isCommentAuthor) {
+    throw toServiceError(
+      'You are not allowed to delete this comment.',
+      403,
+      'FORBIDDEN',
+    );
+  }
+
+  db.prepare(`UPDATE campaign_comments SET deleted_at = ? WHERE id = ?`).run(
+    nowInSeconds(),
+    commentId,
+  );
+}

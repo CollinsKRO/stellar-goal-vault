@@ -26,14 +26,18 @@ import {
   CampaignStatus,
   claimCampaign,
   createCampaign,
+  createComment,
+  deleteComment,
   getCampaign,
   getCampaignWithProgress,
   getContributorSummary,
   getGlobalStats,
+  getTrendingCampaigns,
   getTopContributors,
   initCampaignStore,
   listCampaignPledges,
   listCampaigns,
+  listComments,
   type ListCampaignsOptions,
   reconcileOnChainPledge,
   refundContributor,
@@ -48,8 +52,12 @@ import { AppError, ApiErrorResponse } from './types/errors';
 import {
   campaignIdSchema,
   claimCampaignPayloadSchema,
+  commentIdSchema,
   createCampaignPayloadSchema,
+  createCommentPayloadSchema,
   createPledgePayloadSchema,
+  deleteCommentPayloadSchema,
+  parseCommentListPaginationQuery,
   parseHistoryPaginationQuery,
   parsePledgeListPaginationQuery,
   reconcilePledgePayloadSchema,
@@ -64,10 +72,11 @@ import { logError, logInfo } from './logger';
 import {
   buildCampaignCacheKey,
   getCampaignCacheEntry,
+  getTrendingCacheEntry,
+  setTrendingCacheEntry,
   invalidateCampaignCache,
   setCampaignCacheEntry,
-} from './services/campaignCache';
-export const app = express();
+} from './services/campaignCache';export const app = express();
 
 type CampaignListItem = CampaignRecord & { progress: CampaignProgress };
 
@@ -428,6 +437,25 @@ app.get('/api/campaigns', (req: Request, res: Response) => {
   res.send(responseBody);
 });
 
+app.get('/api/campaigns/trending', (req: Request, res: Response) => {
+  const cached = getTrendingCacheEntry();
+  if (cached) {
+    res.setHeader('X-Cache', 'HIT');
+    res.setHeader('Content-Type', 'application/json');
+    res.send(cached);
+    return;
+  }
+
+  const campaigns = getTrendingCampaigns(10);
+  const responseBody = JSON.stringify({ data: campaigns });
+
+  setTrendingCacheEntry(responseBody);
+
+  res.setHeader('X-Cache', 'MISS');
+  res.setHeader('Content-Type', 'application/json');
+  res.send(responseBody);
+});
+
 app.get('/api/campaigns/:id', (req: Request, res: Response) => {
   const parsedId = parseCampaignId(req.params.id);
   if (!parsedId.ok) {
@@ -638,6 +666,83 @@ app.get('/api/campaigns/:id/history', (req: Request, res: Response) => {
 
   res.json(result);
 });
+
+// --- Comments ---
+
+app.post(
+  '/api/campaigns/:id/comments',
+  applyRateLimit(WRITE_RATE_LIMIT_MAX_REQUESTS),
+  validateBody(createCommentPayloadSchema),
+  (req: Request, res: Response) => {
+    const parsedId = parseCampaignId(req.params.id);
+    if (!parsedId.ok) {
+      sendValidationError(parsedId.issues);
+    }
+
+    const body = req.body as z.infer<typeof createCommentPayloadSchema>;
+    const comment = createComment(parsedId.value, body);
+    res.status(201).json({ data: comment });
+  },
+);
+
+app.get('/api/campaigns/:id/comments', (req: Request, res: Response) => {
+  const parsedId = parseCampaignId(req.params.id);
+  if (!parsedId.ok) {
+    sendValidationError(parsedId.issues);
+  }
+
+  const campaign = getCampaign(parsedId.value);
+  if (!campaign) {
+    throw new AppError('Campaign not found.', 404, 'NOT_FOUND');
+  }
+
+  const paginationResult = parseCommentListPaginationQuery({
+    page: req.query.page,
+    limit: req.query.limit,
+  });
+  if (!paginationResult.ok) {
+    sendValidationError(paginationResult.issues);
+  }
+
+  const { comments, totalCount } = listComments(parsedId.value, {
+    page: paginationResult.page,
+    limit: paginationResult.limit,
+  });
+
+  const totalPages = Math.max(1, Math.ceil(totalCount / paginationResult.limit));
+
+  res.setHeader('X-Total-Count', String(totalCount));
+  res.json({
+    data: comments,
+    pagination: {
+      total: totalCount,
+      page: paginationResult.page,
+      limit: paginationResult.limit,
+      totalPages,
+    },
+  });
+});
+
+app.delete(
+  '/api/campaigns/:id/comments/:commentId',
+  applyRateLimit(WRITE_RATE_LIMIT_MAX_REQUESTS),
+  validateBody(deleteCommentPayloadSchema),
+  (req: Request, res: Response) => {
+    const parsedId = parseCampaignId(req.params.id);
+    if (!parsedId.ok) {
+      sendValidationError(parsedId.issues);
+    }
+
+    const commentIdParsed = commentIdSchema.safeParse(req.params.commentId);
+    if (!commentIdParsed.success) {
+      sendValidationError(commentIdParsed.error.issues);
+    }
+
+    const body = req.body as z.infer<typeof deleteCommentPayloadSchema>;
+    deleteComment(parsedId.value, Number(commentIdParsed.data), body.requestor);
+    res.status(204).send();
+  },
+);
 
 app.get('/api/open-issues', async (_req: Request, res: Response) => {
   const data = await fetchOpenIssues();
