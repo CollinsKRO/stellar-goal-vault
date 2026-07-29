@@ -1,13 +1,15 @@
 
 
-import { FormEvent, useState, useEffect } from 'react';
-import { MousePointer2 } from 'lucide-react';
+import { FormEvent, useState, useEffect, useCallback } from 'react';
+import { MousePointer2, Share2, Download, Link } from 'lucide-react';
 import { Campaign, AppConfig } from '../types/campaign';
 import CopyButton from './CopyButton';
 import { AddressAvatar } from './AddressAvatar';
 import { EmptyState } from './EmptyState';
 import { ContributorSummary } from './ContributorSummary';
 import { CampaignImage } from './CampaignImage';
+import { useCampaignShareCard } from './CampaignShareCard';
+import { useToast } from '../hooks/useToast';
 
 interface CampaignDetailPanelProps {
   campaign: Campaign | null;
@@ -78,6 +80,24 @@ export function CampaignDetailPanel({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [pledgeError, setPledgeError] = useState<string | null>(null);
   const walletReady = appConfig?.walletIntegrationReady ?? false;
+  const { downloadPng, toDataUrl } = useCampaignShareCard();
+  const { addToast } = useToast();
+
+  const handleDownloadPng = useCallback(() => {
+    if (!campaign) return;
+    downloadPng(campaign, campaign.metadata?.imageUrl);
+    addToast('Campaign card downloaded as PNG.', 'success');
+  }, [campaign, downloadPng, addToast]);
+
+  const handleCopyLink = useCallback(() => {
+    if (!campaign) return;
+    const url = `${window.location.origin}/campaigns/${campaign.id}`;
+    navigator.clipboard.writeText(url).then(() => {
+      addToast('Campaign link copied to clipboard.', 'success', { label: url.slice(0, 40) + '…' });
+    }).catch(() => {
+      addToast('Failed to copy link.', 'error');
+    });
+  }, [campaign, addToast]);
 
   useEffect(() => {
 
@@ -398,6 +418,17 @@ export function CampaignDetailPanel({
           </a>
         </div>
       ) : null}
+
+      <div className="share-actions">
+        <button className="btn-ghost" type="button" onClick={handleDownloadPng}>
+          <Download size={16} />
+          Download PNG
+        </button>
+        <button className="btn-ghost" type="button" onClick={handleCopyLink}>
+          <Link size={16} />
+          Copy link
+        </button>
+      </div>
     </section>
   );
 }

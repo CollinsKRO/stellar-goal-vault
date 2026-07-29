@@ -1611,6 +1611,19 @@ tbody tr:hover td {
   margin-top: 20px;
 }
 
+.share-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+  flex-wrap: wrap;
+}
+
+.share-actions .btn-ghost {
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 20px;
+}
+
 .campaign-image-skeleton {
   position: absolute;
   inset: 0;
