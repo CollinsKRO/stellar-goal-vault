@@ -129,6 +129,10 @@ function nowInSeconds(): number {
   return Math.floor(Date.now() / 1000);
 }
 
+function nowInMilliseconds(): number {
+  return Date.now();
+}
+
 function round(value: number): number {
   return Number(value.toFixed(2));
 }
@@ -242,10 +246,11 @@ function checkContributorLimit(
  */
 export function calculateProgress(
   campaign: CampaignRecord,
-  at = nowInSeconds(),
+  at = nowInMilliseconds(),
   pledgeCount?: number,
 ): CampaignProgress {
-  const deadlineReached = at >= campaign.deadline;
+  const deadlineAt = campaign.deadline * 1000;
+  const deadlineReached = at > deadlineAt;
   const canClaim =
     campaign.claimedAt === undefined &&
     deadlineReached &&
@@ -270,7 +275,7 @@ export function calculateProgress(
     percentFunded: round((campaign.pledgedAmount / campaign.targetAmount) * 100),
     remainingAmount: round(Math.max(0, campaign.targetAmount - campaign.pledgedAmount)),
     pledgeCount: pledgeCount ?? getActivePledgeCount(campaign.id),
-    hoursLeft: round(Math.max(0, campaign.deadline - at) / 3600),
+    hoursLeft: round(Math.max(0, deadlineAt - at) / 3600000),
     canPledge,
     canClaim,
     canRefund,
@@ -389,7 +394,7 @@ if (options?.searchQuery && options.searchQuery.trim()) {
   }
 
   if (options?.status) {
-    const now = Math.floor(Date.now() / 1000);
+    const now = nowInMilliseconds();
     switch (options.status) {
       case 'claimed':
         whereClauses.push(`claimed_at IS NOT NULL`);
@@ -399,12 +404,12 @@ if (options?.searchQuery && options.searchQuery.trim()) {
         break;
       case 'failed':
         whereClauses.push(
-          `campaigns.claimed_at IS NULL AND campaigns.pledged_amount < campaigns.target_amount AND campaigns.deadline <= ?`,
+          `campaigns.claimed_at IS NULL AND campaigns.pledged_amount < campaigns.target_amount AND campaigns.deadline * 1000 < ?`,
         );
         params.push(now);
         break;
       case 'open':
-        whereClauses.push(`claimed_at IS NULL AND pledged_amount < target_amount AND deadline > ?`);
+        whereClauses.push(`claimed_at IS NULL AND pledged_amount < target_amount AND deadline * 1000 >= ?`);
         params.push(now);
         break;
     }
@@ -469,8 +474,13 @@ if (options?.searchQuery && options.searchQuery.trim()) {
     const { pledge_count: _pledgeCount, ...campaignRow } = row;
     void _pledgeCount;
 
-    const now = Math.floor(Date.now() / 1000);
-    if (campaignRow.claimed_at === null && campaignRow.pledged_amount < campaignRow.target_amount && now >= campaignRow.deadline && campaignRow.failed_at === null) {
+    const now = nowInMilliseconds();
+    if (
+      campaignRow.claimed_at === null &&
+      campaignRow.pledged_amount < campaignRow.target_amount &&
+      now > campaignRow.deadline * 1000 &&
+      campaignRow.failed_at === null
+    ) {
         campaignRow.failed_at = campaignRow.deadline;
         db.prepare(`UPDATE campaigns SET failed_at = ? WHERE id = ?`).run(campaignRow.deadline, campaignRow.id);
     }
@@ -498,8 +508,13 @@ export function getCampaign(campaignId: string): CampaignRecord | undefined {
     | undefined;
 
   if (row) {
-    const now = Math.floor(Date.now() / 1000);
-    if (row.claimed_at === null && row.pledged_amount < row.target_amount && now >= row.deadline && row.failed_at === null) {
+    const now = nowInMilliseconds();
+    if (
+      row.claimed_at === null &&
+      row.pledged_amount < row.target_amount &&
+      now > row.deadline * 1000 &&
+      row.failed_at === null
+    ) {
         row.failed_at = row.deadline;
         db.prepare(`UPDATE campaigns SET failed_at = ? WHERE id = ?`).run(row.deadline, row.id);
     }
@@ -941,7 +956,7 @@ export function reconcileOnChainPledge(
  * @param at - Unix timestamp (seconds) used to classify campaign statuses; defaults to now.
  * @returns A {@link GlobalStats} object with total campaigns, per-status counts, total pledged, and unique contributor count.
  */
-export function getGlobalStats(at = nowInSeconds()): GlobalStats {
+export function getGlobalStats(at = nowInMilliseconds()): GlobalStats {
   const db = getDb();
   const row = db
     .prepare(
@@ -949,8 +964,8 @@ export function getGlobalStats(at = nowInSeconds()): GlobalStats {
         COUNT(*) AS total_campaigns,
         SUM(CASE WHEN claimed_at IS NOT NULL THEN 1 ELSE 0 END) AS claimed_count,
         SUM(CASE WHEN claimed_at IS NULL AND pledged_amount >= target_amount THEN 1 ELSE 0 END) AS funded_count,
-        SUM(CASE WHEN claimed_at IS NULL AND pledged_amount < target_amount AND deadline <= ? THEN 1 ELSE 0 END) AS failed_count,
-        SUM(CASE WHEN claimed_at IS NULL AND pledged_amount < target_amount AND deadline > ? THEN 1 ELSE 0 END) AS open_count,
+        SUM(CASE WHEN claimed_at IS NULL AND pledged_amount < target_amount AND deadline * 1000 < ? THEN 1 ELSE 0 END) AS failed_count,
+        SUM(CASE WHEN claimed_at IS NULL AND pledged_amount < target_amount AND deadline * 1000 >= ? THEN 1 ELSE 0 END) AS open_count,
         COALESCE(SUM(pledged_amount), 0) AS total_pledged
       FROM campaigns`,
     )

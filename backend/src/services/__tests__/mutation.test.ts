@@ -124,21 +124,30 @@ describe('calculateProgress – boundary conditions', () => {
     expect(progress.canRefund).toBe(false);
   });
 
-  it('is "failed" when deadline == now (at boundary)', () => {
-    const now = Math.floor(Date.now() / 1000);
+  it('is "open" at the exact deadline and fails only after it passes', () => {
+    const now = Date.now();
     const campaign = createCampaign({
       creator: CREATOR,
-      title: 'Boundary failed',
+      title: 'Boundary open',
       description: 'desc',
       assetCode: 'USDC',
       targetAmount: 100,
-      deadline: now,
+      deadline: Math.floor(now / 1000) + 1,
     });
-    // Evaluate exactly AT the deadline
-    const progress = calculateProgress(campaign, campaign.deadline);
-    expect(progress.status).toBe('failed');
-    expect(progress.canPledge).toBe(false);
-    expect(progress.canRefund).toBe(true);
+    campaign.deadline = now / 1000;
+
+    const exactBoundary = calculateProgress(campaign, now);
+    expect(exactBoundary.status).toBe('open');
+    expect(exactBoundary.canPledge).toBe(true);
+    expect(exactBoundary.canRefund).toBe(false);
+
+    const oneMillisecondBefore = calculateProgress(campaign, now - 1);
+    expect(oneMillisecondBefore.status).toBe('open');
+
+    const oneMillisecondAfter = calculateProgress(campaign, now + 1);
+    expect(oneMillisecondAfter.status).toBe('failed');
+    expect(oneMillisecondAfter.canPledge).toBe(false);
+    expect(oneMillisecondAfter.canRefund).toBe(true);
   });
 
   it('is "funded" when pledgedAmount exactly equals targetAmount before deadline', () => {
@@ -246,7 +255,7 @@ describe('calculateProgress – boundary conditions', () => {
       deadline: future(3600), // 1 hour in the future
     });
     // Evaluate 2 hours AFTER the deadline → hoursLeft should be 0
-    const evalAt = campaign.deadline + 7200;
+    const evalAt = campaign.deadline * 1000 + 7200 * 1000;
     const progress = calculateProgress(campaign, evalAt);
     expect(progress.hoursLeft).toBe(0);
   });
