@@ -487,8 +487,12 @@ registry.registerPath({
   path: '/api/campaigns/{id}/pledges',
   tags: ['Pledges'],
   summary: 'Create a pledge',
+  description: 'Creates a pledge for a campaign. Use the Idempotency-Key header to make the request idempotent. Cached responses are returned for 24 hours.',
   request: {
     params: z.object({ id: campaignIdParamSchema }),
+    headers: z.object({
+      'Idempotency-Key': z.string().optional().describe('A unique key to make the request idempotent. Cached responses are returned for duplicate requests using the same key for the same user and campaign.'),
+    }),
     body: { content: { 'application/json': { schema: registeredSchemas.CreatePledgePayload } }, description: 'Pledge creation payload' },
   },
   responses: {

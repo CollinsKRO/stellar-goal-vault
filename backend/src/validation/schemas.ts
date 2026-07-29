@@ -1,7 +1,10 @@
-
+import { config } from '../config';
+import { extendZodWithOpenApi } from '@asteasolutions/zod-to-openapi';
+import { z } from 'zod';
+import { httpsOnlyUrlSchema } from './urlSafety';
+import type { CampaignStatus, CampaignSortField, SortOrder } from '../services/campaignStore';
 
 extendZodWithOpenApi(z);
-import type { CampaignStatus, CampaignSortField, SortOrder } from "../services/campaignStore";
 
 export const STELLAR_ACCOUNT_REGEX = /^G[A-Z2-7]{55}$/;
 export const ASSET_CODE_REGEX = /^[A-Za-z0-9]{1,12}$/;
@@ -67,7 +70,7 @@ export const createCampaignPayloadSchema = z.object({
   title: z
     .string()
     .trim()
-
+    .min(1, 'Campaign title is required.'),
   acceptedTokens: z
     .array(assetCodeSchema)
     .min(1, 'At least one accepted token is required.'),

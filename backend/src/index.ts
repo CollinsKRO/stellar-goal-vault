@@ -2,6 +2,7 @@ import compression from "compression";
 import cors from "cors";
 import "dotenv/config";
 import express, { Request, Response } from "express";
+import helmet from "helmet";
 
 
 import { validateEnv } from "./validateEnv";
@@ -10,6 +11,7 @@ import path from "path";
 import { config, walletIntegrationReady } from "./config";
 import { apiKeyAuthMiddleware } from "./middleware/apiKeyAuth";
 import { cacheMiddleware } from "./middleware/cacheMiddleware";
+import { idempotencyMiddleware } from "./middleware/idempotencyMiddleware";
 import { requestIdMiddleware } from "./middleware/requestId";
 import { validateBody } from "./middleware/validateBody";
 import type { RequestWithId } from "./middleware/types";
@@ -508,6 +510,7 @@ app.post(
 app.post(
   '/api/campaigns/:id/pledges',
   applyRateLimit(WRITE_RATE_LIMIT_MAX_REQUESTS),
+  idempotencyMiddleware,
   validateBody(createPledgePayloadSchema),
   (req: Request, res: Response) => {
     const parsedId = parseCampaignId(req.params.id);

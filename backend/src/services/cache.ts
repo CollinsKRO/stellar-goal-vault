@@ -1,7 +1,5 @@
 import { createClient, RedisClientType } from "redis";
-import { config } from "../config";
 import { logInfo, logError } from "../logger";
-import { config } from "../config";
 
 type RedisClient = RedisClientType;
 
@@ -37,6 +35,9 @@ export async function initRedisCache(): Promise<void> {
     await redisClient.connect();
     isConnected = true;
 
+    redisClient = null;
+    isConnected = false;
+  } catch {
     redisClient = null;
     isConnected = false;
   }
@@ -132,7 +133,8 @@ export async function closeRedisCache(): Promise<void> {
     try {
       await redisClient.quit();
       isConnected = false;
-
+    } catch {
+      isConnected = false;
     }
   }
 }

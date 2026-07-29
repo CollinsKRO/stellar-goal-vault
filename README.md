@@ -323,6 +323,11 @@ Request body:
 
 - `contributor`
 - `amount`
+- `assetCode`
+
+Request headers:
+
+- `Idempotency-Key` (optional): A unique key used to make the request idempotent. When provided, duplicate requests with the same key (for the same user and campaign) will return the cached response instead of creating a new pledge. Cache entries expire after 24 hours. The `X-Idempotency-Cache` response header indicates whether the response was served from cache (`HIT`) or generated fresh (`MISS`).
 
 ### `POST /api/campaigns/:id/pledges/reconcile`
 
