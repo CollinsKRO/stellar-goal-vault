@@ -67,7 +67,13 @@ export const createCampaignPayloadSchema = z.object({
   title: z
     .string()
     .trim()
-
+    .min(1, 'Title is required.')
+    .max(200, 'Title must be 200 characters or fewer.'),
+  description: z
+    .string()
+    .trim()
+    .min(1, 'Description is required.')
+    .max(5000, 'Description must be 5,000 characters or fewer.'),
   acceptedTokens: z
     .array(assetCodeSchema)
     .min(1, 'At least one accepted token is required.'),

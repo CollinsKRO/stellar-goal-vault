@@ -108,7 +108,8 @@ app.use(
 
 app.use(compression({ threshold: 1024 }));
 
-const bodySizeLimit = process.env.MAX_BODY_SIZE || "16kb";
+export const BODY_SIZE_LIMIT = "64kb";
+const bodySizeLimit = process.env.MAX_BODY_SIZE || BODY_SIZE_LIMIT;
 app.use(express.json({ limit: bodySizeLimit }));
 
 // OpenAPI documentation endpoints (public, not rate-limited or cached)
@@ -723,7 +724,7 @@ app.use((err: unknown, req: Request, res: Response, next: express.NextFunction) 
       success: false,
       error: {
         code: 'PAYLOAD_TOO_LARGE',
-        message: 'Request payload size exceeds the maximum allowed limit',
+        message: `Request body exceeds the ${bodySizeLimit} maximum limit.`, 
         requestId: (req as RequestWithId).requestId,
       },
     });
