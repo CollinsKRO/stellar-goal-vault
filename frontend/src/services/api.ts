@@ -4,6 +4,7 @@ import {
   CampaignEvent,
   CreateCampaignPayload,
   CreatePledgePayload,
+  NotificationItem,
   OpenIssue,
   ReconcilePledgePayload,
   SorobanRefundMetadata,
@@ -191,4 +192,33 @@ export async function getDistinctAssetCodes(): Promise<string[]> {
     method: 'GET',
   });
   return body.data;
+}
+
+export async function listNotifications(wallet: string, options?: {
+  limit?: number; offset?: number;
+}): Promise<{ data: NotificationItem[]; total: number; unreadCount: number }> {
+  const params = new URLSearchParams({ wallet });
+  if (options?.limit) params.set('limit', String(options.limit));
+  if (options?.offset) params.set('offset', String(options.offset));
+  return apiRequest({
+    url: `/notifications?${params.toString()}`,
+    method: 'GET',
+  });
+}
+
+export async function getUnreadNotificationCount(wallet: string): Promise<number> {
+  const body = await apiRequest<{ unreadCount: number }>({
+    url: `/notifications/unread-count?wallet=${encodeURIComponent(wallet)}`,
+    method: 'GET',
+  });
+  return body.unreadCount;
+}
+
+export async function markAllNotificationsRead(wallet: string): Promise<void> {
+  await apiRequest({
+    url: '/notifications/mark-all-read',
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    data: { wallet },
+  });
 }

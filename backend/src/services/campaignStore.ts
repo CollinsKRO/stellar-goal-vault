@@ -1,5 +1,6 @@
 import { getDb, initDb } from './db';
 import { getCampaignHistory, recordEvent, BlockchainMetadata } from './eventHistory';
+import { createNotification, getContributorsForCampaign } from './notificationService';
 
 export type CampaignStatus = 'open' | 'funded' | 'claimed' | 'failed';
 
@@ -779,6 +780,30 @@ export function addPledge(campaignId: string, input: PledgeInput): CampaignRecor
     { source: 'local' } as BlockchainMetadata,
   );
 
+  if (campaign.creator !== input.contributor) {
+    createNotification({
+      campaignId,
+      type: 'new_pledge',
+      title: `New pledge on "${campaign.title}"`,
+      body: `${input.contributor.slice(0, 8)}… pledged ${roundedAmount} ${assetCode}`,
+      targetWallet: campaign.creator,
+      actorWallet: input.contributor,
+    });
+  }
+
+  const newlyFunded =
+    nextPledgedAmount >= campaign.targetAmount &&
+    campaign.pledgedAmount < campaign.targetAmount;
+  if (newlyFunded) {
+    createNotification({
+      campaignId,
+      type: 'campaign_funded',
+      title: `"${campaign.title}" is funded!`,
+      body: `Campaign reached its goal of ${campaign.targetAmount} ${assetCode}`,
+      targetWallet: campaign.creator,
+    });
+  }
+
   // Check if contributor has reached their limit and record event
   if (
     campaign.maxPerContributor !== undefined &&
@@ -925,6 +950,30 @@ export function reconcileOnChainPledge(
         txHash: input.transactionHash,
       } as BlockchainMetadata,
     );
+
+    if (campaign.creator !== input.contributor) {
+      createNotification({
+        campaignId,
+        type: 'new_pledge',
+        title: `New on-chain pledge on "${campaign.title}"`,
+        body: `${input.contributor.slice(0, 8)}… pledged ${roundedAmount} ${assetCode} (on-chain)`,
+        targetWallet: campaign.creator,
+        actorWallet: input.contributor,
+      });
+    }
+
+    const newlyFunded =
+      nextPledgedAmount >= campaign.targetAmount &&
+      campaign.pledgedAmount < campaign.targetAmount;
+    if (newlyFunded) {
+      createNotification({
+        campaignId,
+        type: 'campaign_funded',
+        title: `"${campaign.title}" is funded!`,
+        body: `Campaign reached its goal of ${campaign.targetAmount} ${assetCode}`,
+        targetWallet: campaign.creator,
+      });
+    }
 
     return true;
   })();
@@ -1141,6 +1190,14 @@ export function refundContributor(
     walletAddress: reconciliation?.walletAddress,
     ledger: reconciliation?.ledger,
     latestLedger: reconciliation?.latestLedger,
+  });
+
+  createNotification({
+    campaignId,
+    type: 'refund_available',
+    title: `Refund processed for "${campaign.title}"`,
+    body: `${refundedAmount} ${campaign.assetCode} has been refunded to your wallet`,
+    targetWallet: contributor,
   });
 
   return {

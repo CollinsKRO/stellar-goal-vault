@@ -6,6 +6,7 @@ import { FundedConfetti } from "./components/FundedConfetti";
 import { KeyboardShortcutsOverlay } from "./components/KeyboardShortcutsOverlay";
 import { CampaignsTable } from "./components/CampaignsTable";
 import { CampaignTimeline } from "./components/CampaignTimeline";
+import { NotificationBell } from "./components/NotificationBell";
 import { CreateCampaignForm } from "./components/CreateCampaignForm";
 import { CreatorAnalytics } from "./components/CreatorAnalytics";
 import { IssueBacklog } from "./components/IssueBacklog";
@@ -690,6 +691,7 @@ function App() {
               onDisconnect={handleDisconnectWallet}
               onSwitchWallet={wallet.openPicker}
             />
+            <NotificationBell wallet={connectedWallet} campaignId={selectedCampaignId} />
             <button className="btn-ghost" type="button" onClick={handleThemeToggle}>
               {themeMode === "dark" ? "Light mode" : "Dark mode"}
             </button>
