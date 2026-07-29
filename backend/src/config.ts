@@ -46,7 +46,8 @@ export const config = {
   ),
   keepAliveTimeoutMs: parseInteger(process.env.KEEP_ALIVE_TIMEOUT_MS, 65_000),
   headersTimeoutMs: parseInteger(process.env.HEADERS_TIMEOUT_MS, 66_000),
-
+  webhookUrl: process.env.WEBHOOK_URL ?? '',
+  webhookSecret: process.env.WEBHOOK_SECRET ?? '',
 };
 
 export const walletIntegrationReady = Boolean(

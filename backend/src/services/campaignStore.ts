@@ -1,5 +1,6 @@
 import { getDb, initDb } from './db';
 import { getCampaignHistory, recordEvent, BlockchainMetadata } from './eventHistory';
+import { dispatchWebhook } from './webhookService';
 
 export type CampaignStatus = 'open' | 'funded' | 'claimed' | 'failed';
 
@@ -476,6 +477,11 @@ if (options?.searchQuery && options.searchQuery.trim()) {
     if (campaignRow.claimed_at === null && campaignRow.pledged_amount < campaignRow.target_amount && now >= campaignRow.deadline && campaignRow.failed_at === null) {
         campaignRow.failed_at = campaignRow.deadline;
         db.prepare(`UPDATE campaigns SET failed_at = ? WHERE id = ?`).run(campaignRow.deadline, campaignRow.id);
+        void dispatchWebhook('campaign_failed', campaignRow.id, {
+          pledgedAmount: campaignRow.pledged_amount,
+          targetAmount: campaignRow.target_amount,
+          deadline: campaignRow.deadline,
+        });
     }
     
     return rowToCampaign(campaignRow as CampaignRow);
@@ -505,6 +511,11 @@ export function getCampaign(campaignId: string): CampaignRecord | undefined {
     if (row.claimed_at === null && row.pledged_amount < row.target_amount && now >= row.deadline && row.failed_at === null) {
         row.failed_at = row.deadline;
         db.prepare(`UPDATE campaigns SET failed_at = ? WHERE id = ?`).run(row.deadline, row.id);
+        void dispatchWebhook('campaign_failed', row.id, {
+          pledgedAmount: row.pledged_amount,
+          targetAmount: row.target_amount,
+          deadline: row.deadline,
+        });
     }
     const campaign = rowToCampaign(row);
     campaign.tokenBalances = getCampaignTokenBalances(campaignId);
@@ -782,6 +793,16 @@ export function addPledge(campaignId: string, input: PledgeInput): CampaignRecor
     { source: 'local' } as BlockchainMetadata,
   );
 
+  const wasFunded = campaign.pledgedAmount >= campaign.targetAmount;
+  const isFunded = nextPledgedAmount >= campaign.targetAmount;
+  if (!wasFunded && isFunded) {
+    void dispatchWebhook('campaign_funded', campaignId, {
+      pledgedAmount: nextPledgedAmount,
+      targetAmount: campaign.targetAmount,
+      assetCode,
+    });
+  }
+
   // Check if contributor has reached their limit and record event
   if (
     campaign.maxPerContributor !== undefined &&
@@ -929,6 +950,17 @@ export function reconcileOnChainPledge(
       } as BlockchainMetadata,
     );
 
+    const wasFunded = campaign.pledgedAmount >= campaign.targetAmount;
+    const isFunded = nextPledgedAmount >= campaign.targetAmount;
+    if (!wasFunded && isFunded) {
+      void dispatchWebhook('campaign_funded', campaignId, {
+        pledgedAmount: nextPledgedAmount,
+        targetAmount: campaign.targetAmount,
+        assetCode,
+        onChain: true,
+      });
+    }
+
     return true;
   })();
 
@@ -1041,6 +1073,13 @@ function reconcileOnChainClaim(campaignId: string, input: ReconciledClaimInput):
         txHash: input.transactionHash,
       } as BlockchainMetadata,
     );
+
+    void dispatchWebhook('vault_claimed', campaignId, {
+      creator: input.creator,
+      claimedAmount: campaign.pledgedAmount,
+      transactionHash: input.transactionHash,
+      confirmedAt: claimedAt,
+    });
   });
 
   commit();
@@ -1156,6 +1195,13 @@ export function refundContributor(
     walletAddress: reconciliation?.walletAddress,
     ledger: reconciliation?.ledger,
     latestLedger: reconciliation?.latestLedger,
+  });
+
+  void dispatchWebhook('pledge_refunded', campaignId, {
+    contributor,
+    refundedAmount,
+    refundedPledgeCount: refundablePledges.length,
+    refundedAt,
   });
 
   return {

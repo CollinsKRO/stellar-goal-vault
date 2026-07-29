@@ -42,6 +42,7 @@ import {
 import { checkDbHealth } from './services/db';
 import { listCampaignHistory } from './services/eventHistory';
 import { startEventIndexer } from './services/eventIndexer';
+import { getDeadLetterQueue, clearDeadLetterQueue, retryDeadLetter } from './services/webhookService';
 import { fetchOpenIssues } from './services/openIssues';
 import { ensureSorobanRefundConfig, verifyRefundTransaction } from './services/sorobanRpc';
 import { AppError, ApiErrorResponse } from './types/errors';
@@ -712,6 +713,36 @@ app.get('/api/leaderboard', (req: Request, res: Response) => {
         message: 'Failed to fetch leaderboard',
         requestId: (req as RequestWithId).requestId,
       },
+    });
+  }
+});
+
+app.get('/api/webhooks/dead-letter', (req: Request, res: Response) => {
+  const limit = req.query.limit ? Number(req.query.limit) : 50;
+  const entries = getDeadLetterQueue(limit);
+  res.json({ success: true, data: entries });
+});
+
+app.delete('/api/webhooks/dead-letter', (_req: Request, res: Response) => {
+  clearDeadLetterQueue();
+  res.json({ success: true, message: 'Dead-letter queue cleared' });
+});
+
+app.post('/api/webhooks/dead-letter/:id/retry', async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  if (Number.isNaN(id)) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'BAD_REQUEST', message: 'Invalid dead-letter ID' },
+    });
+  }
+  const success = await retryDeadLetter(id);
+  if (success) {
+    res.json({ success: true, message: 'Webhook retried successfully' });
+  } else {
+    res.status(500).json({
+      success: false,
+      error: { code: 'WEBHOOK_RETRY_FAILED', message: 'Failed to retry webhook delivery' },
     });
   }
 });
