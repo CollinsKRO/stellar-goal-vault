@@ -3,7 +3,6 @@ import cors from "cors";
 import "dotenv/config";
 import express, { Request, Response } from "express";
 
-
 import { validateEnv } from "./validateEnv";
 import { z } from "zod";
 import path from "path";
@@ -60,7 +59,7 @@ import {
   normalizeQueryValue,
 } from './validation/schemas';
 import { generateOpenApiDocument } from './openapi';
-import { logError, logInfo } from './logger';
+import { logError, logInfo, logger } from './logger';
 import {
   buildCampaignCacheKey,
   getCampaignCacheEntry,

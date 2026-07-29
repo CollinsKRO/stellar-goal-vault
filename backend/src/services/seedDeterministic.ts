@@ -96,6 +96,6 @@ export function seedDeterministicState(): void {
 
 if (require.main === module) {
   seedDeterministicState();
-  // eslint-disable-next-line no-console
-  console.log('Deterministic database seed complete.');
+  const { logger } = require('../logger');
+  logger.info('Deterministic database seed complete.');
 }
