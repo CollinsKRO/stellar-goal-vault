@@ -22,6 +22,7 @@ export interface PledgeInput {
   contributor: string;
   amount: number;
   assetCode?: string; // Optional for backward compatibility if only one token
+  tokenId?: string; // Canonical token identifier (code:issuer for classic; contract addr for native). Falls back to assetCode if missing.
 }
 
 export interface ReconciledPledgeInput extends PledgeInput {
@@ -68,6 +69,7 @@ export interface PledgeRecord {
   contributor: string;
   amount: number;
   assetCode: string;
+  tokenId?: string; // Canonical token identifier
   createdAt: number;
   refundedAt?: number;
   transactionHash?: string;
@@ -108,6 +110,7 @@ interface PledgeRow {
   contributor: string;
   amount: number;
   asset_code: string;
+  token_id: string | null;
   created_at: number;
   refunded_at: number | null;
   transaction_hash: string | null;
@@ -161,6 +164,7 @@ function rowToPledge(row: PledgeRow): PledgeRecord {
     contributor: row.contributor,
     amount: row.amount,
     assetCode: row.asset_code,
+    tokenId: row.token_id ?? row.asset_code,
     createdAt: row.created_at,
     refundedAt: row.refunded_at ?? undefined,
     transactionHash: row.transaction_hash ?? undefined,
@@ -729,6 +733,7 @@ export function addPledge(campaignId: string, input: PledgeInput): CampaignRecor
   }
 
   const assetCode = (input.assetCode || campaign.assetCode).toUpperCase();
+  const tokenId = input.tokenId || assetCode;
 
   if (!campaign.acceptedTokens.includes(assetCode)) {
     throw toServiceError(
@@ -756,9 +761,9 @@ export function addPledge(campaignId: string, input: PledgeInput): CampaignRecor
     );
   }
   db.prepare(
-    `INSERT INTO pledges (campaign_id, contributor, amount, asset_code, created_at, refunded_at, transaction_hash)
-     VALUES (?, ?, ?, ?, ?, NULL, NULL)`,
-  ).run(campaignId, input.contributor, roundedAmount, assetCode, createdAt);
+    `INSERT INTO pledges (campaign_id, contributor, amount, asset_code, token_id, created_at, refunded_at, transaction_hash)
+     VALUES (?, ?, ?, ?, ?, ?, NULL, NULL)`,
+  ).run(campaignId, input.contributor, roundedAmount, assetCode, tokenId, createdAt);
 
   db.prepare(`UPDATE campaigns SET pledged_amount = pledged_amount + ? WHERE id = ?`).run(
     roundedAmount,
@@ -856,6 +861,7 @@ export function reconcileOnChainPledge(
   const createdAt = input.confirmedAt ?? nowInSeconds();
   const roundedAmount = round(input.amount);
   const assetCode = (input.assetCode || campaign.assetCode).toUpperCase();
+  const tokenId = input.tokenId || assetCode;
   const nextPledgedAmount = round(campaign.pledgedAmount + roundedAmount);
 
   if (nextPledgedAmount > campaign.targetAmount) {
@@ -870,14 +876,15 @@ export function reconcileOnChainPledge(
     const result = db
       .prepare(
         `INSERT OR IGNORE INTO pledges (
-          campaign_id, contributor, amount, asset_code, created_at, refunded_at, transaction_hash
-        ) VALUES (?, ?, ?, ?, ?, NULL, ?)`,
+          campaign_id, contributor, amount, asset_code, token_id, created_at, refunded_at, transaction_hash
+        ) VALUES (?, ?, ?, ?, ?, ?, NULL, ?)`,
       )
       .run(
         campaignId,
         input.contributor,
         roundedAmount,
         assetCode,
+        tokenId,
         createdAt,
         input.transactionHash,
       );
@@ -1163,16 +1170,16 @@ export function getCampaignTokenBalances(campaignId: string): Record<string, num
   const db = getDb();
   const rows = db
     .prepare(
-      `SELECT asset_code, COALESCE(SUM(amount), 0) AS balance
+      `SELECT COALESCE(token_id, asset_code) AS token_id, COALESCE(SUM(amount), 0) AS balance
        FROM pledges
        WHERE campaign_id = ? AND refunded_at IS NULL
-       GROUP BY asset_code`,
+       GROUP BY COALESCE(token_id, asset_code)`,
     )
-    .all(campaignId) as Array<{ asset_code: string; balance: number }>;
+    .all(campaignId) as Array<{ token_id: string; balance: number }>;
 
   const result: Record<string, number> = {};
   for (const row of rows) {
-    result[row.asset_code] = round(row.balance);
+    result[row.token_id] = round(row.balance);
   }
   return result;
 }

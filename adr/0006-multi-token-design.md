@@ -18,7 +18,12 @@ Adopt **Option 1: Multi-token support**.
 
 The Soroban contract stores `accepted_tokens: Vec<Address>` on each campaign (Soroban-native address type identifying each token's on-chain contract). The `contribute` function validates that the pledged asset address is in the accepted list before recording the pledge. Pledged amounts are tracked per token using `Contribution(u64, Address, Address)` and `CampaignTokenBalance(u64, Address)` storage keys.
 
-**Canonical token identity**: On-chain, tokens are identified by their Soroban `Address` (the contract address). Off-chain (backend), `accepted_tokens` are stored as uppercase string codes in `accepted_tokens_json`. Classic Stellar assets require both the asset code and issuer to uniquely identify a token (e.g., `USDC:GA...`), while Soroban-native tokens use their contract address. A formal canonical token-identity specification that unifies these representations across the contract, backend, and frontend is a known gap tracked for future refinement.
+**Canonical token identity**: The project defines a single canonical token identifier format to prevent balances from being incorrectly merged or split across different issuers or contract addresses:
+
+- **Classic Stellar assets**: `CODE:ISSUER` (e.g., `USDC:GA5ZSE...`). The asset code of up to 12 characters and the issuing account's public key are combined with a colon separator. This resolves ambiguity when multiple issuers use the same asset code.
+- **Soroban-native tokens**: The token's Soroban contract address directly (e.g., `C...`).
+
+On-chain, both map to a Soroban `Address` type. Off-chain, the backend stores canonical IDs in `accepted_tokens_json` and groups pledges by `token_id` (the canonical identifier stored alongside the legacy `asset_code` column). The `token_id` column in the `pledges` table holds the canonical identifier; `asset_code` is retained as a denormalized shorthand for backward compatibility. When `token_id` is not provided (legacy data), the system falls back to `asset_code`.
 
 Valuation uses a simple 1:1 unit sum — `pledged_amount` is the raw sum of all token amounts. Creators should only accept tokens of similar value (e.g., stablecoins) or understand that the target is a sum of units. This avoids oracle complexity for the MVP while leaving room for price-feed integration later.
 
@@ -30,7 +35,8 @@ The full design rationale, including storage schema, API contracts, and trade-of
 - **Consistent contract behavior** — multi-token support is enforced at the Soroban contract level, so all frontends behave the same way.
 - **UI complexity** — the frontend renders a token selector when `acceptedTokens.length > 1` and displays per-token progress bars (`CampaignCard` shows individual `<div class="progress-bar">` elements).
 - **Valuation caveat** — the 1:1 unit sum means a campaign accepting both USDC and XLM would count 1 USDC == 1 XLM toward the target. Integrators must understand this limitation.
-- **Backend tracking** — `getCampaignTokenBalances(campaignId)` queries the `pledges` table grouped by `asset_code` (the uppercase string representation). The `tokenBalances` map is returned on every campaign read. The backend does not currently normalize token identity across code+issuer or contract address, which may cause merging or splitting of balances when multiple representations of the same token exist.
+- **Campaign-level token identity gap** — `accepted_tokens_json` currently stores uppercase asset codes without issuer info (e.g., `["USDC"]`), so campaign acceptance validation cannot distinguish between the same asset code from different issuers. The canonical `token_id` (with issuer) is enforced at the pledge level only. Full issuer-aware campaign token acceptance is tracked as a future refinement.
+- **Backend tracking** — `getCampaignTokenBalances(campaignId)` queries the `pledges` table grouped by `token_id` (the canonical identifier). When `token_id` is `NULL` (legacy records), the query falls back to `asset_code`. The `tokenBalances` map is keyed by the canonical token ID and returned on every campaign read. Legacy data without `token_id` is automatically backfilled by the database migration.
 
 ## References
 
