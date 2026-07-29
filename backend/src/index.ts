@@ -644,6 +644,29 @@ app.get('/api/open-issues', async (_req: Request, res: Response) => {
   res.json({ data });
 });
 
+const ASSET_METADATA: Record<string, { name: string, icon_url: string, min_pledge: number, max_pledge: number }> = {
+  USDC: { name: 'USD Coin', icon_url: 'https://cryptologos.cc/logos/usd-coin-usdc-logo.png', min_pledge: 1, max_pledge: 10000 },
+  XLM: { name: 'Stellar Lumens', icon_url: 'https://cryptologos.cc/logos/stellar-xlm-logo.png', min_pledge: 10, max_pledge: 100000 },
+  ARS: { name: 'Argentine Peso', icon_url: '', min_pledge: 1000, max_pledge: 10000000 },
+};
+
+const supportedAssetsCache = config.allowedAssets.map((code) => {
+  const meta = ASSET_METADATA[code] || { name: code, icon_url: '', min_pledge: 0, max_pledge: 0 };
+  return {
+    code,
+    name: meta.name,
+    contract_address: config.assetAddresses[code] || '',
+    icon_url: meta.icon_url,
+    min_pledge: meta.min_pledge,
+    max_pledge: meta.max_pledge,
+  };
+});
+
+app.get('/api/assets', (_req: Request, res: Response) => {
+  res.setHeader('Cache-Control', 'public, max-age=31536000');
+  res.json({ data: supportedAssetsCache });
+});
+
 app.get('/api/config', (_req: Request, res: Response) => {
   res.json({
     data: {
