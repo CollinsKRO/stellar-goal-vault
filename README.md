@@ -20,6 +20,8 @@ Contributors can pledge until the deadline:
 
 This repo is intentionally scoped as an MVP so it is easy to extend with wallet signing, event indexing, and production-grade UX.
 
+> **📚 Documentation index:** See [INDEX.md](./INDEX.md) for a complete map of every documentation file in the repository, organized by topic.
+
 ## Current architecture
 
 Frontend (`frontend`, port `3000`)
