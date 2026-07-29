@@ -40,7 +40,7 @@ import {
   SortOrder,
 } from './services/campaignStore';
 import { checkDbHealth } from './services/db';
-import { listCampaignHistory } from './services/eventHistory';
+import { getCampaignTimeline, listCampaignHistory } from './services/eventHistory';
 import { startEventIndexer } from './services/eventIndexer';
 import { fetchOpenIssues } from './services/openIssues';
 import { ensureSorobanRefundConfig, verifyRefundTransaction } from './services/sorobanRpc';
@@ -52,6 +52,7 @@ import {
   createPledgePayloadSchema,
   parseHistoryPaginationQuery,
   parsePledgeListPaginationQuery,
+  parseTimelineQuery,
   reconcilePledgePayloadSchema,
   refundPayloadSchema,
   zodIssuesToErrorMessage,
@@ -637,6 +638,30 @@ app.get('/api/campaigns/:id/history', (req: Request, res: Response) => {
   });
 
   res.json(result);
+});
+
+app.get('/api/campaigns/:id/timeline', (req: Request, res: Response) => {
+  const parsedId = parseCampaignId(req.params.id);
+  if (!parsedId.ok) {
+    sendValidationError(parsedId.issues);
+  }
+
+  const campaign = getCampaign(parsedId.value);
+  if (!campaign) {
+    throw new AppError('Campaign not found.', 404, 'NOT_FOUND');
+  }
+
+  const parsed = parseTimelineQuery(req.query);
+  if (!parsed.ok) {
+    sendValidationError(parsed.issues);
+  }
+
+  const result = getCampaignTimeline(parsedId.value, {
+    cursor: parsed.cursor,
+    limit: parsed.limit,
+  });
+
+  res.json({ data: result.data, pagination: { nextCursor: result.nextCursor, hasMore: result.hasMore } });
 });
 
 app.get('/api/open-issues', async (_req: Request, res: Response) => {
