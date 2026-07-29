@@ -1262,3 +1262,26 @@ export function getTopContributors(limit: number = 10): LeaderboardEntry[] {
     averagePledgeAmount: round(row.avg_pledge),
   }));
 }
+
+export interface CampaignAnalytics {
+  fundingGap: number;
+}
+
+/**
+ * Computes basic analytics for a campaign.
+ *
+ * @param campaignId - The unique campaign identifier.
+ * @returns A {@link CampaignAnalytics} object with computed metrics, or undefined if campaign doesn't exist.
+ */
+export function getCampaignAnalytics(campaignId: string): CampaignAnalytics | undefined {
+  const campaign = getCampaign(campaignId);
+  if (!campaign) {
+    return undefined;
+  }
+
+  const fundingGap = round(Math.max(0, campaign.targetAmount - campaign.pledgedAmount));
+
+  return {
+    fundingGap,
+  };
+}
