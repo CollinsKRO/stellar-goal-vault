@@ -3,6 +3,15 @@ import fs from 'fs';
 import { Server } from 'http';
 import path from 'path';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+
+// The write rate limit (default 20/min) is a module-level constant in `./index`,
+// evaluated at import time. This suite exercises many archive/restore/pledge
+// mutations across its describe blocks, so raise the limit before `./index`
+// is imported to avoid tripping 429s on unrelated test assertions.
+vi.hoisted(() => {
+  process.env.RATE_LIMIT_WRITE_LIMIT = '1000';
+});
+
 import { app } from './index';
 import { initCampaignStore } from './services/campaignStore';
 import { getDb } from './services/db';
@@ -427,6 +436,144 @@ describe('Campaign maxPerContributor Field', () => {
     const detailRes = await get(`/api/campaigns/${campaignId}`);
     expect(detailRes.status).toBe(200);
     expect(detailRes.data.data.maxPerContributor).toBe(75);
+  });
+});
+
+describe('Campaign archive (soft delete) and restore', () => {
+  async function get(apiPath: string) {
+    const response = await fetch(`${baseUrl}${apiPath}`);
+    const data = await response.json().catch(() => null);
+    return { status: response.status, data };
+  }
+
+  async function post(apiPath: string, body?: unknown) {
+    const response = await fetch(`${baseUrl}${apiPath}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+    const data = await response.json().catch(() => null);
+    return { status: response.status, data };
+  }
+
+  async function del(apiPath: string) {
+    const response = await fetch(`${baseUrl}${apiPath}`, { method: 'DELETE' });
+    const data = await response.json().catch(() => null);
+    return { status: response.status, data };
+  }
+
+  async function createTestCampaign(title: string) {
+    const now = Math.floor(Date.now() / 1000);
+    const res = await post('/api/campaigns', {
+      creator: CREATOR,
+      title,
+      description: 'A campaign used to exercise archive/restore behavior',
+      acceptedTokens: ['USDC'],
+      targetAmount: 100,
+      deadline: now + 3600,
+    });
+    expect(res.status).toBe(201);
+    return res.data.data.id as string;
+  }
+
+  it('DELETE /api/campaigns/:id archives the campaign and sets deletedAt', async () => {
+    const campaignId = await createTestCampaign('Archive me');
+
+    const deleteRes = await del(`/api/campaigns/${campaignId}`);
+    expect(deleteRes.status).toBe(200);
+    expect(deleteRes.data.data.deletedAt).toBeDefined();
+  });
+
+  it('archived campaigns are excluded from the default GET /api/campaigns list', async () => {
+    const campaignId = await createTestCampaign('Hidden after archive');
+    await del(`/api/campaigns/${campaignId}`);
+
+    const listRes = await get('/api/campaigns?page=1&limit=50');
+    expect(listRes.status).toBe(200);
+    expect(listRes.data.data.some((c: { id: string }) => c.id === campaignId)).toBe(false);
+  });
+
+  it('GET /api/campaigns?includeDeleted=true includes archived campaigns', async () => {
+    const campaignId = await createTestCampaign('Visible with includeDeleted');
+    await del(`/api/campaigns/${campaignId}`);
+
+    const listRes = await get('/api/campaigns?page=1&limit=50&includeDeleted=true');
+    expect(listRes.status).toBe(200);
+    expect(listRes.data.data.some((c: { id: string }) => c.id === campaignId)).toBe(true);
+  });
+
+  it('GET /api/campaigns?include_archived=true is accepted as an alias for includeDeleted', async () => {
+    const campaignId = await createTestCampaign('Visible with include_archived');
+    await del(`/api/campaigns/${campaignId}`);
+
+    const listRes = await get('/api/campaigns?page=1&limit=50&include_archived=true');
+    expect(listRes.status).toBe(200);
+    expect(listRes.data.data.some((c: { id: string }) => c.id === campaignId)).toBe(true);
+  });
+
+  it('DELETE on an already-archived campaign returns 409', async () => {
+    const campaignId = await createTestCampaign('Double archive');
+    await del(`/api/campaigns/${campaignId}`);
+
+    const secondDelete = await del(`/api/campaigns/${campaignId}`);
+    expect(secondDelete.status).toBe(409);
+    expect(secondDelete.data.error.code).toBe('ALREADY_DELETED');
+  });
+
+  it('DELETE on a nonexistent campaign returns 404', async () => {
+    const res = await del('/api/campaigns/999999');
+    expect(res.status).toBe(404);
+    expect(res.data.error.code).toBe('NOT_FOUND');
+  });
+
+  it('POST /api/campaigns/:id/restore un-archives the campaign', async () => {
+    const campaignId = await createTestCampaign('Restore me');
+    await del(`/api/campaigns/${campaignId}`);
+
+    const restoreRes = await post(`/api/campaigns/${campaignId}/restore`);
+    expect(restoreRes.status).toBe(200);
+    expect(restoreRes.data.data.deletedAt).toBeUndefined();
+
+    const listRes = await get('/api/campaigns?page=1&limit=50');
+    expect(listRes.data.data.some((c: { id: string }) => c.id === campaignId)).toBe(true);
+  });
+
+  it('POST restore on a campaign that is not archived returns 409', async () => {
+    const campaignId = await createTestCampaign('Never archived');
+    const res = await post(`/api/campaigns/${campaignId}/restore`);
+    expect(res.status).toBe(409);
+    expect(res.data.error.code).toBe('NOT_ARCHIVED');
+  });
+
+  it('POST restore on a nonexistent campaign returns 404', async () => {
+    const res = await post('/api/campaigns/999999/restore');
+    expect(res.status).toBe(404);
+    expect(res.data.error.code).toBe('NOT_FOUND');
+  });
+
+  it('preserves pledges and history through an archive + restore cycle', async () => {
+    const campaignId = await createTestCampaign('Preserve pledges');
+    const pledgeRes = await post(`/api/campaigns/${campaignId}/pledges`, {
+      contributor: CONTRIBUTOR,
+      amount: 25,
+      assetCode: 'USDC',
+    });
+    expect(pledgeRes.status).toBe(201);
+
+    await del(`/api/campaigns/${campaignId}`);
+    await post(`/api/campaigns/${campaignId}/restore`);
+
+    const detailRes = await get(`/api/campaigns/${campaignId}`);
+    expect(detailRes.status).toBe(200);
+    expect(detailRes.data.data.pledgedAmount).toBe(25);
+
+    const historyRes = await get(`/api/campaigns/${campaignId}/history`);
+    expect(historyRes.status).toBe(200);
+    const eventTypes = historyRes.data.data.map((e: { eventType: string }) => e.eventType);
+    expect(eventTypes).toContain('created');
+    expect(eventTypes).toContain('pledged');
+    expect(eventTypes).toContain('archived');
+    expect(eventTypes).toContain('restored');
   });
 });
 

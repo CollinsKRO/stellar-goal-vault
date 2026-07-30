@@ -445,13 +445,17 @@ export function parseCampaignListQuery(
     }
   }
 
-  const includeDeletedValue = singleCampaignListQueryParam(query.includeDeleted);
+  // `includeDeleted` is the canonical param; `include_archived` is accepted as an
+  // alias so archived/soft-deleted campaigns can be included in the campaign list.
+  const includeDeletedValue =
+    singleCampaignListQueryParam(query.includeDeleted) ??
+    singleCampaignListQueryParam(query.include_archived);
   let includeDeleted: boolean | undefined;
   if (includeDeletedValue !== undefined) {
     if (includeDeletedValue !== 'true' && includeDeletedValue !== 'false') {
       issues.push({
         code: 'custom',
-        message: "includeDeleted must be 'true' or 'false'.",
+        message: "includeDeleted (or include_archived) must be 'true' or 'false'.",
         path: ['includeDeleted'],
       });
     } else {
