@@ -540,7 +540,7 @@ That issue is already represented in:
 
 ## Frequently Asked Questions
 
-See the [FAQ.md](./FAQ.md) for answers to common questions about testnet funding, Freighter setup, contract deployment, database reset, pledge failures, and more.
+See [FAQ.md](./FAQ.md) for 22 Q&A entries covering campaign creation, pledging, refunds, supported wallets, fees, mainnet support, and local development — organized into **For Creators**, **For Backers**, and **Technical** sections.
 
 ## Troubleshooting
 
