@@ -428,6 +428,11 @@ const validationErrorResponse = {
   content: { 'application/json': { schema: registeredSchemas.ApiError } },
 };
 
+const payloadTooLargeResponse = {
+  description: 'Request body exceeds the 64KB maximum limit',
+  content: { 'application/json': { schema: registeredSchemas.ApiError } },
+};
+
 registry.registerPath({
   method: 'get',
   path: '/api/health',
@@ -537,6 +542,7 @@ registry.registerPath({
       content: { 'application/json': { schema: registeredSchemas.CampaignDetailResponse } },
     },
     400: validationErrorResponse,
+    413: payloadTooLargeResponse,
   },
 });
 
@@ -638,6 +644,7 @@ registry.registerPath({
     },
     400: validationErrorResponse,
     404: notFoundResponse,
+    413: payloadTooLargeResponse,
     429: { description: 'Rate limit exceeded' },
   },
 });
@@ -662,6 +669,7 @@ registry.registerPath({
     },
     400: validationErrorResponse,
     404: notFoundResponse,
+    413: payloadTooLargeResponse,
     429: { description: 'Rate limit exceeded' },
   },
 });
@@ -686,6 +694,7 @@ registry.registerPath({
     },
     400: validationErrorResponse,
     404: notFoundResponse,
+    413: payloadTooLargeResponse,
     429: { description: 'Rate limit exceeded' },
   },
 });
@@ -711,6 +720,7 @@ registry.registerPath({
     },
     400: validationErrorResponse,
     404: notFoundResponse,
+    413: payloadTooLargeResponse,
     429: { description: 'Rate limit exceeded' },
   },
 });

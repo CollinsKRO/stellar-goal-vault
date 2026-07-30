@@ -864,7 +864,7 @@ app.use((err: unknown, req: Request, res: Response, next: express.NextFunction) 
       success: false,
       error: {
         code: 'PAYLOAD_TOO_LARGE',
-        message: 'Request payload size exceeds the maximum allowed limit',
+        message: `Request body exceeds the ${bodySizeLimit} maximum limit.`, 
         requestId: (req as RequestWithId).requestId,
       },
     });
