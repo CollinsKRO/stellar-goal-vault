@@ -194,7 +194,7 @@ export function getPledgeByTransactionHash(transactionHash: string): PledgeRecor
   return row ? rowToPledge(row) : undefined;
 }
 
-function getContributorPledgedTotal(campaignId: string, contributor: string): number {
+export function getContributorPledgedTotal(campaignId: string, contributor: string): number {
   const db = getDb();
   const row = db
     .prepare(
@@ -743,65 +743,83 @@ export function addPledge(campaignId: string, input: PledgeInput): CampaignRecor
     throw toServiceError('Campaign is no longer accepting pledges.', 400, 'INVALID_CAMPAIGN_STATE');
   }
 
-  checkContributorLimit(campaign, input.contributor, input.amount);
-
   const createdAt = nowInSeconds();
   const roundedAmount = round(input.amount);
-  const nextPledgedAmount = round(campaign.pledgedAmount + roundedAmount);
-  if (nextPledgedAmount > campaign.targetAmount) {
-    throw toServiceError(
-      'Pledge exceeds campaign funding cap.',
-      400,
-      'CAMPAIGN_FUNDING_CAP_EXCEEDED',
-    );
-  }
-  db.prepare(
-    `INSERT INTO pledges (campaign_id, contributor, amount, asset_code, created_at, refunded_at, transaction_hash)
-     VALUES (?, ?, ?, ?, ?, NULL, NULL)`,
-  ).run(campaignId, input.contributor, roundedAmount, assetCode, createdAt);
 
-  db.prepare(`UPDATE campaigns SET pledged_amount = pledged_amount + ? WHERE id = ?`).run(
-    roundedAmount,
-    campaignId,
-  );
+  db.transaction(() => {
+    // Re-check contributor limit within transaction to prevent race conditions
+    const existingPledged = getContributorPledgedTotal(campaignId, input.contributor);
+    if (campaign.maxPerContributor !== undefined && campaign.maxPerContributor > 0) {
+      if (existingPledged + roundedAmount > campaign.maxPerContributor) {
+        throw toServiceError(
+          'Pledge exceeds maximum allowed per contributor.',
+          400,
+          'MAX_PER_CONTRIBUTOR_EXCEEDED',
+        );
+      }
+    }
 
-  recordEvent(
-    campaignId,
-    'pledged',
-    createdAt,
-    input.contributor,
-    roundedAmount,
-    {
-      newTotalPledged: nextPledgedAmount,
-      assetCode,
-      source: 'backend-mvp',
-    },
-    { source: 'local' } as BlockchainMetadata,
-  );
-
-  // Check if contributor has reached their limit and record event
-  if (
-    campaign.maxPerContributor !== undefined &&
-    campaign.maxPerContributor > 0
-  ) {
-    const newContributorTotal = round(
-      getContributorPledgedTotal(campaignId, input.contributor),
-    );
-    if (newContributorTotal >= campaign.maxPerContributor) {
-      recordEvent(
-        campaignId,
-        "pledge_limit_reached",
-        createdAt,
-        input.contributor,
-        newContributorTotal,
-        {
-          maxPerContributor: campaign.maxPerContributor,
-          assetCode,
-        },
-        { source: "local" } as BlockchainMetadata,
+    // Re-check campaign funding cap within transaction
+    const currentPledgedAmount = db
+      .prepare(`SELECT pledged_amount FROM campaigns WHERE id = ?`)
+      .get(campaignId) as { pledged_amount: number };
+    const nextPledgedAmount = round(currentPledgedAmount.pledged_amount + roundedAmount);
+    if (nextPledgedAmount > campaign.targetAmount) {
+      throw toServiceError(
+        'Pledge exceeds campaign funding cap.',
+        400,
+        'CAMPAIGN_FUNDING_CAP_EXCEEDED',
       );
     }
-  }
+
+    db.prepare(
+      `INSERT INTO pledges (campaign_id, contributor, amount, asset_code, created_at, refunded_at, transaction_hash)
+       VALUES (?, ?, ?, ?, ?, NULL, NULL)`,
+    ).run(campaignId, input.contributor, roundedAmount, assetCode, createdAt);
+
+    db.prepare(`UPDATE campaigns SET pledged_amount = pledged_amount + ? WHERE id = ?`).run(
+      roundedAmount,
+      campaignId,
+    );
+
+    recordEvent(
+      campaignId,
+      'pledged',
+      createdAt,
+      input.contributor,
+      roundedAmount,
+      {
+        newTotalPledged: nextPledgedAmount,
+        assetCode,
+        source: 'backend-mvp',
+      },
+      { source: 'local' } as BlockchainMetadata,
+    );
+
+    // Check if contributor has reached their limit and record event
+    if (
+      campaign.maxPerContributor !== undefined &&
+      campaign.maxPerContributor > 0
+    ) {
+      const newContributorTotal = round(
+        getContributorPledgedTotal(campaignId, input.contributor),
+      );
+      if (newContributorTotal >= campaign.maxPerContributor) {
+        recordEvent(
+          campaignId,
+          "pledge_limit_reached",
+          createdAt,
+          input.contributor,
+          newContributorTotal,
+          {
+            maxPerContributor: campaign.maxPerContributor,
+            assetCode,
+          },
+          { source: "local" } as BlockchainMetadata,
+        );
+      }
+    }
+  })();
 
   return getCampaign(campaignId)!;
 }
@@ -850,23 +868,36 @@ export function reconcileOnChainPledge(
     throw toServiceError('Campaign is no longer accepting pledges.', 400, 'INVALID_CAMPAIGN_STATE');
   }
 
-  checkContributorLimit(campaign, input.contributor, input.amount);
-
   const db = getDb();
   const createdAt = input.confirmedAt ?? nowInSeconds();
   const roundedAmount = round(input.amount);
   const assetCode = (input.assetCode || campaign.assetCode).toUpperCase();
-  const nextPledgedAmount = round(campaign.pledgedAmount + roundedAmount);
-
-  if (nextPledgedAmount > campaign.targetAmount) {
-    throw toServiceError(
-      'Pledge exceeds campaign funding cap.',
-      400,
-      'CAMPAIGN_FUNDING_CAP_EXCEEDED',
-    );
-  }
 
   const insertedNewPledge = db.transaction(() => {
+    // Re-check contributor limit within transaction to prevent race conditions
+    const existingPledged = getContributorPledgedTotal(campaignId, input.contributor);
+    if (campaign.maxPerContributor !== undefined && campaign.maxPerContributor > 0) {
+      if (existingPledged + roundedAmount > campaign.maxPerContributor) {
+        throw toServiceError(
+          'Pledge exceeds maximum allowed per contributor.',
+          400,
+          'MAX_PER_CONTRIBUTOR_EXCEEDED',
+        );
+      }
+    }
+
+    // Re-check campaign funding cap within transaction
+    const currentPledgedAmount = db
+      .prepare(`SELECT pledged_amount FROM campaigns WHERE id = ?`)
+      .get(campaignId) as { pledged_amount: number };
+    const nextPledgedAmount = round(currentPledgedAmount.pledged_amount + roundedAmount);
+    if (nextPledgedAmount > campaign.targetAmount) {
+      throw toServiceError(
+        'Pledge exceeds campaign funding cap.',
+        400,
+        'CAMPAIGN_FUNDING_CAP_EXCEEDED',
+      );
+    }
     const result = db
       .prepare(
         `INSERT OR IGNORE INTO pledges (
