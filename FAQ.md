@@ -70,7 +70,16 @@ If you need to remove a test campaign in a local development environment, you ca
 
 ### 4. Can I update my campaign after publishing it?
 
-You can update `title`, `description`, and `metadata` (image URL, external link) before the deadline via the `PATCH /api/campaigns/:id/metadata` endpoint. The Soroban contract also exposes `update_metadata` for on-chain updates that emit a `MetadataUpdated` event, which the backend event indexer picks up automatically.
+The Soroban contract exposes `update_metadata` for on-chain updates before the deadline:
+
+```bash
+stellar contract invoke --id $CONTRACT_ID -- update_metadata \
+  --campaign_id 1 \
+  --creator $CREATOR_ADDRESS \
+  --new_metadata "Updated description"
+```
+
+The contract emits a `MetadataUpdated` event containing the old and new values. The backend event indexer picks this up automatically and updates local state.
 
 You cannot change `targetAmount`, `deadline`, or `acceptedTokens` after creation.
 
