@@ -510,6 +510,43 @@ export function parseCampaignListQuery(
   };
 }
 
+export function parseTimelineQuery(query: {
+  cursor?: unknown;
+  limit?: unknown;
+}):
+  | { ok: true; cursor?: string; limit: number }
+  | { ok: false; issues: z.core.$ZodIssue[] } {
+  const issues: z.core.$ZodIssue[] = [];
+
+  let cursor: string | undefined;
+  if (query.cursor !== undefined) {
+    if (typeof query.cursor !== 'string' || query.cursor === '') {
+      issues.push({
+        code: 'custom',
+        message: 'Cursor must be a non-empty string.',
+        path: ['cursor'],
+      } as z.core.$ZodIssue);
+    } else {
+      cursor = query.cursor;
+    }
+  }
+
+  const parsedLimit = parsePositiveIntegerQueryParam(query.limit, 'limit', 100);
+  if (!parsedLimit.ok) {
+    issues.push(...parsedLimit.issues);
+  }
+
+  if (issues.length > 0) {
+    return { ok: false, issues };
+  }
+
+  return {
+    ok: true,
+    cursor,
+    limit: parsedLimit.ok ? (parsedLimit.value ?? 20) : 20,
+  };
+}
+
 export type ValidationIssue = {
   field: string;
   message: string;
