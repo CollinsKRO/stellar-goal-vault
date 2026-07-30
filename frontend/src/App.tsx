@@ -743,6 +743,7 @@ function App() {
             isConnectingWallet={isConnectingWallet}
             isPledgePending={pendingPledgeCampaignId === selectedCampaignId}
             isLoading={isSelectedLoading || initialLoad}
+            notFoundCampaignId={invalidUrlCampaignId}
             onConnectWallet={handleConnectWallet}
             onDisconnectWallet={handleDisconnectWallet}
             onPledge={handlePledge}
