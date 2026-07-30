@@ -13,7 +13,7 @@ vi.hoisted(() => {
 });
 
 import { app } from './index';
-import { initCampaignStore } from './services/campaignStore';
+import { createCampaign, initCampaignStore } from './services/campaignStore';
 import { getDb } from './services/db';
 
 // Mock sorobanRpc to avoid real network calls during tests
@@ -416,6 +416,44 @@ describe('Campaign maxPerContributor Field', () => {
     const campaign = listRes.data.data.find((c: { id: string; maxPerContributor?: number }) => c.id === campaignId);
     expect(campaign).toBeDefined();
     expect(campaign.maxPerContributor).toBe(50);
+  });
+
+  it('keeps a campaign open at the exact deadline and fails it 1ms later', async () => {
+    const fixedNow = 1_700_000_000_000;
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(fixedNow);
+
+    try {
+      const campaign = createCampaign({
+        creator: CREATOR,
+        title: 'Exact deadline boundary campaign',
+        description: 'Boundary test for exact deadline status consistency',
+        acceptedTokens: ['USDC'],
+        targetAmount: 100,
+        deadline: Math.floor(fixedNow / 1000),
+      });
+
+      const firstCall = await get('/api/campaigns?page=1&limit=10');
+      expect(firstCall.status).toBe(200);
+
+      const firstListedCampaign = firstCall.data.data.find((item: { id: string; progress: { status: string } }) => item.id === campaign.id);
+      expect(firstListedCampaign?.progress.status).toBe('open');
+
+      const secondCall = await get('/api/campaigns?page=1&limit=10');
+      expect(secondCall.status).toBe(200);
+
+      const secondListedCampaign = secondCall.data.data.find((item: { id: string; progress: { status: string } }) => item.id === campaign.id);
+      expect(secondListedCampaign?.progress.status).toBe('open');
+
+      nowSpy.mockReturnValue(fixedNow + 1);
+
+      const oneMillisecondLater = await get('/api/campaigns?page=1&limit=10');
+      expect(oneMillisecondLater.status).toBe(200);
+
+      const failedCampaign = oneMillisecondLater.data.data.find((item: { id: string; progress: { status: string } }) => item.id === campaign.id);
+      expect(failedCampaign?.progress.status).toBe('failed');
+    } finally {
+      nowSpy.mockRestore();
+    }
   });
 
   it('includes maxPerContributor in GET /api/campaigns/:id detail response', async () => {
