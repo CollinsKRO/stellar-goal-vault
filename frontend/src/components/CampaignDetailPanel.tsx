@@ -158,6 +158,8 @@ export function CampaignDetailPanel({
     setIsSubmitting(true);
     try {
       await onPledge(activeCampaign.id, Number(pledgeAmount), selectedToken);
+      setPledgeAmount('25');
+      setPledgeToken('');
     } catch (error) {
       setPledgeError(describePledgeError(error));
     } finally {
