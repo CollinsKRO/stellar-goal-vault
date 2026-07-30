@@ -18,6 +18,7 @@ Thank you for your interest in contributing to **Stellar Goal Vault**!
 - Check the [FAQ.md](./FAQ.md) for answers to common questions.
 - See the [Troubleshooting Guide](./docs/TROUBLESHOOTING.md) for solutions to common development issues.
 - Browse `OPEN_SOURCE_ISSUES.md` for curated contribution ideas.
+- To test the pledge flow with a real wallet, follow the [Freighter Pledge Signing Walkthrough](./docs/FREIGHTER_GUIDE.md).
 
 ## Backend Development
 
