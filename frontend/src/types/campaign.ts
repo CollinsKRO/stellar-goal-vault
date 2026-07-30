@@ -97,6 +97,7 @@ export interface CreateCampaignPayload {
     imageUrl?: string;
     externalLink?: string;
   };
+  maxPerContributor?: number;
 }
 
 export interface CreatePledgePayload {
