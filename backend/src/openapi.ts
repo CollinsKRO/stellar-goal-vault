@@ -175,6 +175,8 @@ const campaignEventSchema = z
         'updated',
         'metadata_updated',
         'pledge_limit_reached',
+        'archived',
+        'restored',
       ])
       .openapi({ example: 'pledged' }),
     timestamp: unixTimestampSchema,
@@ -434,6 +436,11 @@ const validationErrorResponse = {
   content: { 'application/json': { schema: registeredSchemas.ApiError } },
 };
 
+const payloadTooLargeResponse = {
+  description: 'Request body exceeds the 64KB maximum limit',
+  content: { 'application/json': { schema: registeredSchemas.ApiError } },
+};
+
 registry.registerPath({
   method: 'get',
   path: '/api/health',
@@ -498,7 +505,13 @@ registry.registerPath({
       status: z.enum(['open', 'funded', 'claimed', 'failed']).optional(),
       sort: z.enum(['createdAt', 'deadline', 'pledgedAmount', 'targetAmount']).optional(),
       order: z.enum(['asc', 'desc']).optional(),
-      includeDeleted: z.enum(['true', 'false']).optional(),
+      includeDeleted: z.enum(['true', 'false']).optional().openapi({
+        description: "Include archived (soft-deleted) campaigns. Alias: 'include_archived'.",
+      }),
+      include_archived: z
+        .enum(['true', 'false'])
+        .optional()
+        .openapi({ description: "Alias for 'includeDeleted'." }),
       createdAfter: z
         .string()
         .datetime()
@@ -537,6 +550,7 @@ registry.registerPath({
       content: { 'application/json': { schema: registeredSchemas.CampaignDetailResponse } },
     },
     400: validationErrorResponse,
+    413: payloadTooLargeResponse,
   },
 });
 
@@ -553,6 +567,47 @@ registry.registerPath({
     },
     400: validationErrorResponse,
     404: notFoundResponse,
+  },
+});
+
+registry.registerPath({
+  method: 'delete',
+  path: '/api/campaigns/{id}',
+  tags: ['Campaigns'],
+  summary: 'Archive (soft-delete) a campaign',
+  description:
+    'Sets the archivedAt/deletedAt timestamp on a campaign. Archived campaigns are excluded ' +
+    "from the default campaign list but their pledges and history are preserved. Use POST " +
+    '/api/campaigns/{id}/restore to un-archive.',
+  request: { params: z.object({ id: campaignIdParamSchema }) },
+  responses: {
+    200: {
+      description: 'Campaign archived',
+      content: { 'application/json': { schema: registeredSchemas.CampaignDetailResponse } },
+    },
+    400: validationErrorResponse,
+    404: notFoundResponse,
+    409: { description: 'Campaign is already archived' },
+    429: { description: 'Rate limit exceeded' },
+  },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/api/campaigns/{id}/restore',
+  tags: ['Campaigns'],
+  summary: 'Restore an archived campaign',
+  description: 'Clears the archivedAt/deletedAt timestamp, making the campaign active again.',
+  request: { params: z.object({ id: campaignIdParamSchema }) },
+  responses: {
+    200: {
+      description: 'Campaign restored',
+      content: { 'application/json': { schema: registeredSchemas.CampaignDetailResponse } },
+    },
+    400: validationErrorResponse,
+    404: notFoundResponse,
+    409: { description: 'Campaign is not archived' },
+    429: { description: 'Rate limit exceeded' },
   },
 });
 
@@ -597,6 +652,7 @@ registry.registerPath({
     },
     400: validationErrorResponse,
     404: notFoundResponse,
+    413: payloadTooLargeResponse,
     429: { description: 'Rate limit exceeded' },
   },
 });
@@ -621,6 +677,7 @@ registry.registerPath({
     },
     400: validationErrorResponse,
     404: notFoundResponse,
+    413: payloadTooLargeResponse,
     429: { description: 'Rate limit exceeded' },
   },
 });
@@ -645,6 +702,7 @@ registry.registerPath({
     },
     400: validationErrorResponse,
     404: notFoundResponse,
+    413: payloadTooLargeResponse,
     429: { description: 'Rate limit exceeded' },
   },
 });
@@ -670,6 +728,7 @@ registry.registerPath({
     },
     400: validationErrorResponse,
     404: notFoundResponse,
+    413: payloadTooLargeResponse,
     429: { description: 'Rate limit exceeded' },
   },
 });

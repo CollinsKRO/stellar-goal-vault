@@ -31,6 +31,7 @@ import {
   getCampaignWithProgress,
   getContributorSummary,
   getGlobalStats,
+  getTrendingCampaigns,
   getTopContributors,
   initCampaignStore,
   listCampaignPledges,
@@ -38,10 +39,12 @@ import {
   type ListCampaignsOptions,
   reconcileOnChainPledge,
   refundContributor,
+  restoreCampaign,
+  softDeleteCampaign,
   SortOrder,
 } from './services/campaignStore';
 import { checkDbHealth } from './services/db';
-import { listCampaignHistory } from './services/eventHistory';
+import { getCampaignTimeline, listCampaignHistory } from './services/eventHistory';
 import { startEventIndexer } from './services/eventIndexer';
 import { getDeadLetterQueue, clearDeadLetterQueue, retryDeadLetter } from './services/webhookService';
 import { fetchOpenIssues } from './services/openIssues';
@@ -54,6 +57,7 @@ import {
   createPledgePayloadSchema,
   parseHistoryPaginationQuery,
   parsePledgeListPaginationQuery,
+  parseTimelineQuery,
   reconcilePledgePayloadSchema,
   refundPayloadSchema,
   zodIssuesToErrorMessage,
@@ -66,6 +70,8 @@ import { logError, logInfo } from './logger';
 import {
   buildCampaignCacheKey,
   getCampaignCacheEntry,
+  getTrendingCacheEntry,
+  setTrendingCacheEntry,
   invalidateCampaignCache,
   setCampaignCacheEntry,
 } from './services/campaignCache';
@@ -461,6 +467,28 @@ app.get('/api/campaigns', (req: Request, res: Response) => {
   res.send(responseBody);
 });
 
+app.get('/api/campaigns/trending', (req: Request, res: Response) => {
+  const cached = getTrendingCacheEntry();
+  if (cached) {
+    res.setHeader('X-Cache', 'HIT');
+    res.setHeader('Content-Type', 'application/json');
+    res.send(cached);
+    return;
+  }
+
+  const campaigns = getTrendingCampaigns(10);
+
+  const responseBody = JSON.stringify({
+    data: campaigns,
+  });
+
+  setTrendingCacheEntry(responseBody);
+
+  res.setHeader('X-Cache', 'MISS');
+  res.setHeader('Content-Type', 'application/json');
+  res.send(responseBody);
+});
+
 app.get('/api/campaigns/:id', (req: Request, res: Response) => {
   const parsedId = parseCampaignId(req.params.id);
   if (!parsedId.ok) {
@@ -474,6 +502,36 @@ app.get('/api/campaigns/:id', (req: Request, res: Response) => {
 
   res.json({ data: campaign });
 });
+
+app.delete(
+  '/api/campaigns/:id',
+  applyRateLimit(WRITE_RATE_LIMIT_MAX_REQUESTS),
+  (req: Request, res: Response) => {
+    const parsedId = parseCampaignId(req.params.id);
+    if (!parsedId.ok) {
+      sendValidationError(parsedId.issues);
+    }
+
+    const campaign = softDeleteCampaign(parsedId.value);
+    invalidateCampaignCache();
+    res.json({ data: { ...campaign, progress: calculateProgress(campaign) } });
+  },
+);
+
+app.post(
+  '/api/campaigns/:id/restore',
+  applyRateLimit(WRITE_RATE_LIMIT_MAX_REQUESTS),
+  (req: Request, res: Response) => {
+    const parsedId = parseCampaignId(req.params.id);
+    if (!parsedId.ok) {
+      sendValidationError(parsedId.issues);
+    }
+
+    const campaign = restoreCampaign(parsedId.value);
+    invalidateCampaignCache();
+    res.json({ data: { ...campaign, progress: calculateProgress(campaign) } });
+  },
+);
 
 app.get('/api/campaigns/:id/pledges', (req: Request, res: Response) => {
   const parsedId = parseCampaignId(req.params.id);
@@ -671,9 +729,56 @@ app.get('/api/campaigns/:id/history', (req: Request, res: Response) => {
   res.json(result);
 });
 
+app.get('/api/campaigns/:id/timeline', (req: Request, res: Response) => {
+  const parsedId = parseCampaignId(req.params.id);
+  if (!parsedId.ok) {
+    sendValidationError(parsedId.issues);
+  }
+
+  const campaign = getCampaign(parsedId.value);
+  if (!campaign) {
+    throw new AppError('Campaign not found.', 404, 'NOT_FOUND');
+  }
+
+  const parsed = parseTimelineQuery(req.query);
+  if (!parsed.ok) {
+    sendValidationError(parsed.issues);
+  }
+
+  const result = getCampaignTimeline(parsedId.value, {
+    cursor: parsed.cursor,
+    limit: parsed.limit,
+  });
+
+  res.json({ data: result.data, pagination: { nextCursor: result.nextCursor, hasMore: result.hasMore } });
+});
+
 app.get('/api/open-issues', async (_req: Request, res: Response) => {
   const data = await fetchOpenIssues();
   res.json({ data });
+});
+
+const ASSET_METADATA: Record<string, { name: string, icon_url: string, min_pledge: number, max_pledge: number }> = {
+  USDC: { name: 'USD Coin', icon_url: 'https://cryptologos.cc/logos/usd-coin-usdc-logo.png', min_pledge: 1, max_pledge: 10000 },
+  XLM: { name: 'Stellar Lumens', icon_url: 'https://cryptologos.cc/logos/stellar-xlm-logo.png', min_pledge: 10, max_pledge: 100000 },
+  ARS: { name: 'Argentine Peso', icon_url: '', min_pledge: 1000, max_pledge: 10000000 },
+};
+
+const supportedAssetsCache = config.allowedAssets.map((code) => {
+  const meta = ASSET_METADATA[code] || { name: code, icon_url: '', min_pledge: 0, max_pledge: 0 };
+  return {
+    code,
+    name: meta.name,
+    contract_address: config.assetAddresses[code] || '',
+    icon_url: meta.icon_url,
+    min_pledge: meta.min_pledge,
+    max_pledge: meta.max_pledge,
+  };
+});
+
+app.get('/api/assets', (_req: Request, res: Response) => {
+  res.setHeader('Cache-Control', 'public, max-age=31536000');
+  res.json({ data: supportedAssetsCache });
 });
 
 app.get('/api/config', (_req: Request, res: Response) => {
@@ -798,7 +903,7 @@ app.use((err: unknown, req: Request, res: Response, next: express.NextFunction) 
       success: false,
       error: {
         code: 'PAYLOAD_TOO_LARGE',
-        message: 'Request payload size exceeds the maximum allowed limit',
+        message: `Request body exceeds the ${bodySizeLimit} maximum limit.`, 
         requestId: (req as RequestWithId).requestId,
       },
     });

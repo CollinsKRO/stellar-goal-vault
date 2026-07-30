@@ -16,7 +16,9 @@ Thank you for your interest in contributing to **Stellar Goal Vault**!
 
 - Read the [README.md](./README.md) for project overview and architecture.
 - Check the [FAQ.md](./FAQ.md) for answers to common questions.
+- See the [Troubleshooting Guide](./docs/TROUBLESHOOTING.md) for solutions to common development issues.
 - Browse `OPEN_SOURCE_ISSUES.md` for curated contribution ideas.
+- To test the pledge flow with a real wallet, follow the [Freighter Pledge Signing Walkthrough](./docs/FREIGHTER_GUIDE.md).
 
 ## Backend Development
 
@@ -103,6 +105,8 @@ Thank you for your interest in contributing to **Stellar Goal Vault**!
   - Next run will recreate it with the schema
 
 ### Troubleshooting
+
+See the [Troubleshooting Guide](./docs/TROUBLESHOOTING.md) for a comprehensive list of common issues.
 
 #### "SQLITE_CANTOPEN" or database file not found
 - Ensure the directory specified in `DB_PATH` exists

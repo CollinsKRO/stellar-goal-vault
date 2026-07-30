@@ -445,13 +445,17 @@ export function parseCampaignListQuery(
     }
   }
 
-  const includeDeletedValue = singleCampaignListQueryParam(query.includeDeleted);
+  // `includeDeleted` is the canonical param; `include_archived` is accepted as an
+  // alias so archived/soft-deleted campaigns can be included in the campaign list.
+  const includeDeletedValue =
+    singleCampaignListQueryParam(query.includeDeleted) ??
+    singleCampaignListQueryParam(query.include_archived);
   let includeDeleted: boolean | undefined;
   if (includeDeletedValue !== undefined) {
     if (includeDeletedValue !== 'true' && includeDeletedValue !== 'false') {
       issues.push({
         code: 'custom',
-        message: "includeDeleted must be 'true' or 'false'.",
+        message: "includeDeleted (or include_archived) must be 'true' or 'false'.",
         path: ['includeDeleted'],
       });
     } else {
@@ -503,6 +507,43 @@ export function parseCampaignListQuery(
       createdAfter,
       createdBefore,
     },
+  };
+}
+
+export function parseTimelineQuery(query: {
+  cursor?: unknown;
+  limit?: unknown;
+}):
+  | { ok: true; cursor?: string; limit: number }
+  | { ok: false; issues: z.core.$ZodIssue[] } {
+  const issues: z.core.$ZodIssue[] = [];
+
+  let cursor: string | undefined;
+  if (query.cursor !== undefined) {
+    if (typeof query.cursor !== 'string' || query.cursor === '') {
+      issues.push({
+        code: 'custom',
+        message: 'Cursor must be a non-empty string.',
+        path: ['cursor'],
+      } as z.core.$ZodIssue);
+    } else {
+      cursor = query.cursor;
+    }
+  }
+
+  const parsedLimit = parsePositiveIntegerQueryParam(query.limit, 'limit', 100);
+  if (!parsedLimit.ok) {
+    issues.push(...parsedLimit.issues);
+  }
+
+  if (issues.length > 0) {
+    return { ok: false, issues };
+  }
+
+  return {
+    ok: true,
+    cursor,
+    limit: parsedLimit.ok ? (parsedLimit.value ?? 20) : 20,
   };
 }
 

@@ -528,7 +528,7 @@ function App() {
 
       await refreshSelectedData(campaignId);
       addToast(
-        `Pledge confirmed on-chain. Tx: ${transactionResult.transactionHash.slice(0, 12)}…`,
+        `Pledged ${amount} ${assetCode}. Tx: ${transactionResult.transactionHash.slice(0, 12)}…`,
         "success",
         {
           href: stellarExpertTxUrl(
@@ -743,6 +743,7 @@ function App() {
             isConnectingWallet={isConnectingWallet}
             isPledgePending={pendingPledgeCampaignId === selectedCampaignId}
             isLoading={isSelectedLoading || initialLoad}
+            notFoundCampaignId={invalidUrlCampaignId}
             onConnectWallet={handleConnectWallet}
             onDisconnectWallet={handleDisconnectWallet}
             onPledge={handlePledge}
