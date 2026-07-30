@@ -7,7 +7,9 @@ export type CampaignEventType =
   | 'refunded'
   | 'updated'
   | 'metadata_updated'
-  | 'pledge_limit_reached';
+  | 'pledge_limit_reached'
+  | 'archived'
+  | 'restored';
 export interface BlockchainMetadata {
   txHash?: string;
   ledgerNumber?: number;

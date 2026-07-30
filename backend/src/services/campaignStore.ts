@@ -1047,14 +1047,16 @@ export function claimCampaign(campaignId: string, input: ReconciledClaimInput): 
 }
 
 /**
- * Soft-deletes a campaign by setting its `deleted_at` timestamp.
- * The record remains in the database but is excluded from normal queries.
+ * Soft-deletes (archives) a campaign by setting its `deleted_at` timestamp.
+ * The record, its pledges, and its event history remain in the database
+ * untouched but the campaign is excluded from the default campaign list.
  *
  * @param campaignId - The unique campaign identifier.
+ * @returns The updated {@link CampaignRecord} with `deletedAt` set.
  * @throws {ServiceError} 404 `NOT_FOUND` if the campaign does not exist.
  * @throws {ServiceError} 409 `ALREADY_DELETED` if the campaign has already been soft-deleted.
  */
-export function softDeleteCampaign(campaignId: string): void {
+export function softDeleteCampaign(campaignId: string): CampaignRecord {
   const db = getDb();
   const campaign = getCampaign(campaignId);
   if (!campaign) {
@@ -1072,6 +1074,43 @@ export function softDeleteCampaign(campaignId: string): void {
   if (changes.changes === 0) {
     throw toServiceError('Campaign not found or already deleted.', 404, 'NOT_FOUND');
   }
+
+  recordEvent(campaignId, 'archived', deletedAt, campaign.creator);
+
+  return getCampaign(campaignId)!;
+}
+
+/**
+ * Restores a previously archived (soft-deleted) campaign, clearing `deleted_at`
+ * so it reappears in the default campaign list. Pledges and history are untouched.
+ *
+ * @param campaignId - The unique campaign identifier.
+ * @returns The updated {@link CampaignRecord} with `deletedAt` cleared.
+ * @throws {ServiceError} 404 `NOT_FOUND` if the campaign does not exist.
+ * @throws {ServiceError} 409 `NOT_ARCHIVED` if the campaign is not currently archived.
+ */
+export function restoreCampaign(campaignId: string): CampaignRecord {
+  const db = getDb();
+  const campaign = getCampaign(campaignId);
+  if (!campaign) {
+    throw toServiceError('Campaign not found.', 404, 'NOT_FOUND');
+  }
+  if (!campaign.deletedAt) {
+    throw toServiceError('Campaign is not archived.', 409, 'NOT_ARCHIVED');
+  }
+
+  const restoredAt = nowInSeconds();
+  const changes = db
+    .prepare(`UPDATE campaigns SET deleted_at = NULL WHERE id = ? AND deleted_at IS NOT NULL`)
+    .run(campaignId);
+
+  if (changes.changes === 0) {
+    throw toServiceError('Campaign not found or not archived.', 404, 'NOT_FOUND');
+  }
+
+  recordEvent(campaignId, 'restored', restoredAt, campaign.creator);
+
+  return getCampaign(campaignId)!;
 }
 
 /**

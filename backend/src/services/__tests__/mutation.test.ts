@@ -45,6 +45,7 @@ let reconcileOnChainPledge: CampaignStoreModule['reconcileOnChainPledge'];
 let getGlobalStats: CampaignStoreModule['getGlobalStats'];
 let getContributorSummary: CampaignStoreModule['getContributorSummary'];
 let softDeleteCampaign: CampaignStoreModule['softDeleteCampaign'];
+let restoreCampaign: CampaignStoreModule['restoreCampaign'];
 let listCampaigns: CampaignStoreModule['listCampaigns'];
 let getDb: DbModule['getDb'];
 let recordEvent: EventHistoryModule['recordEvent'];
@@ -83,6 +84,7 @@ beforeAll(async () => {
     getGlobalStats,
     getContributorSummary,
     softDeleteCampaign,
+    restoreCampaign,
     listCampaigns,
   } = await import('../campaignStore'));
 
@@ -1059,6 +1061,114 @@ describe('softDeleteCampaign – guard mutations', () => {
     softDeleteCampaign(c.id);
     const { campaigns } = listCampaigns({ includeDeleted: true });
     expect(campaigns.find((x) => x.id === c.id)).toBeDefined();
+  });
+
+  it('sets deletedAt on the returned campaign and records an "archived" event', () => {
+    const c = createCampaign({
+      creator: CREATOR,
+      title: 'Archived event check',
+      description: 'desc',
+      assetCode: 'USDC',
+      targetAmount: 100,
+      deadline: future(),
+    });
+    const archived = softDeleteCampaign(c.id);
+    expect(archived.deletedAt).toBeDefined();
+    const history = getCampaignHistory(c.id);
+    const archivedEvent = history.find((e) => e.eventType === 'archived');
+    expect(archivedEvent).toBeDefined();
+    expect(archivedEvent!.actor).toBe(CREATOR);
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// restoreCampaign — un-archive guard mutations
+// ═════════════════════════════════════════════════════════════════════════════
+describe('restoreCampaign – guard mutations', () => {
+  it('throws NOT_FOUND for nonexistent campaign', () => {
+    expect(() => restoreCampaign('99999')).toThrow('Campaign not found');
+  });
+
+  it('throws NOT_ARCHIVED when campaign is not archived', () => {
+    const c = createCampaign({
+      creator: CREATOR,
+      title: 'Not archived',
+      description: 'desc',
+      assetCode: 'USDC',
+      targetAmount: 100,
+      deadline: future(),
+    });
+    expect(() => restoreCampaign(c.id)).toThrow('Campaign is not archived');
+  });
+
+  it('clears deletedAt and makes the campaign visible in the default list again', () => {
+    const c = createCampaign({
+      creator: CREATOR,
+      title: 'Restore round trip',
+      description: 'desc',
+      assetCode: 'USDC',
+      targetAmount: 100,
+      deadline: future(),
+    });
+    softDeleteCampaign(c.id);
+    expect(listCampaigns().campaigns.find((x) => x.id === c.id)).toBeUndefined();
+
+    const restored = restoreCampaign(c.id);
+    expect(restored.deletedAt).toBeUndefined();
+    expect(listCampaigns().campaigns.find((x) => x.id === c.id)).toBeDefined();
+  });
+
+  it('preserves pledges and history through archive + restore', () => {
+    const c = createCampaign({
+      creator: CREATOR,
+      title: 'Preserve on restore',
+      description: 'desc',
+      assetCode: 'USDC',
+      targetAmount: 100,
+      deadline: future(),
+    });
+    addPledge(c.id, { contributor: CONTRIBUTOR, amount: 40 });
+    softDeleteCampaign(c.id);
+    restoreCampaign(c.id);
+
+    expect(getPledges(c.id)).toHaveLength(1);
+    expect(getCampaign(c.id)!.pledgedAmount).toBe(40);
+    const history = getCampaignHistory(c.id);
+    expect(history.some((e) => e.eventType === 'created')).toBe(true);
+    expect(history.some((e) => e.eventType === 'pledged')).toBe(true);
+    expect(history.some((e) => e.eventType === 'archived')).toBe(true);
+    expect(history.some((e) => e.eventType === 'restored')).toBe(true);
+  });
+
+  it('records a "restored" event with the campaign creator as actor', () => {
+    const c = createCampaign({
+      creator: CREATOR,
+      title: 'Restored event check',
+      description: 'desc',
+      assetCode: 'USDC',
+      targetAmount: 100,
+      deadline: future(),
+    });
+    softDeleteCampaign(c.id);
+    restoreCampaign(c.id);
+    const history = getCampaignHistory(c.id);
+    const restoredEvent = history.find((e) => e.eventType === 'restored');
+    expect(restoredEvent).toBeDefined();
+    expect(restoredEvent!.actor).toBe(CREATOR);
+  });
+
+  it('throws ALREADY_DELETED if archived again without restoring first', () => {
+    const c = createCampaign({
+      creator: CREATOR,
+      title: 'Double archive',
+      description: 'desc',
+      assetCode: 'USDC',
+      targetAmount: 100,
+      deadline: future(),
+    });
+    softDeleteCampaign(c.id);
+    restoreCampaign(c.id);
+    expect(() => softDeleteCampaign(c.id)).not.toThrow();
   });
 });
 

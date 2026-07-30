@@ -38,6 +38,8 @@ import {
   type ListCampaignsOptions,
   reconcileOnChainPledge,
   refundContributor,
+  restoreCampaign,
+  softDeleteCampaign,
   SortOrder,
 } from './services/campaignStore';
 import { checkDbHealth } from './services/db';
@@ -473,6 +475,36 @@ app.get('/api/campaigns/:id', (req: Request, res: Response) => {
 
   res.json({ data: campaign });
 });
+
+app.delete(
+  '/api/campaigns/:id',
+  applyRateLimit(WRITE_RATE_LIMIT_MAX_REQUESTS),
+  (req: Request, res: Response) => {
+    const parsedId = parseCampaignId(req.params.id);
+    if (!parsedId.ok) {
+      sendValidationError(parsedId.issues);
+    }
+
+    const campaign = softDeleteCampaign(parsedId.value);
+    invalidateCampaignCache();
+    res.json({ data: { ...campaign, progress: calculateProgress(campaign) } });
+  },
+);
+
+app.post(
+  '/api/campaigns/:id/restore',
+  applyRateLimit(WRITE_RATE_LIMIT_MAX_REQUESTS),
+  (req: Request, res: Response) => {
+    const parsedId = parseCampaignId(req.params.id);
+    if (!parsedId.ok) {
+      sendValidationError(parsedId.issues);
+    }
+
+    const campaign = restoreCampaign(parsedId.value);
+    invalidateCampaignCache();
+    res.json({ data: { ...campaign, progress: calculateProgress(campaign) } });
+  },
+);
 
 app.get('/api/campaigns/:id/pledges', (req: Request, res: Response) => {
   const parsedId = parseCampaignId(req.params.id);
