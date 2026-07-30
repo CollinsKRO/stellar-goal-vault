@@ -684,11 +684,14 @@ describe('claimCampaign – guards', () => {
     expect(claimEvent!.blockchainMetadata?.txHash).toBe(TX_HASH);
   });
 
-  it('second claim is idempotent (returns same claimedAt)', () => {
+  it('second claim throws 409 CAMPAIGN_ALREADY_CLAIMED', () => {
     const c = fundedExpiredCampaign();
     claimCampaign(c.id, { creator: CREATOR, transactionHash: TX_HASH });
     const first = getCampaign(c.id)!.claimedAt;
-    claimCampaign(c.id, { creator: CREATOR, transactionHash: TX_HASH2 });
+    expect(() =>
+      claimCampaign(c.id, { creator: CREATOR, transactionHash: TX_HASH2 }),
+    ).toThrow('Campaign already claimed');
+    // claimedAt must remain unchanged after failed double-claim
     expect(getCampaign(c.id)!.claimedAt).toBe(first);
   });
 });

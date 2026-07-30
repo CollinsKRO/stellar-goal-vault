@@ -121,13 +121,29 @@ describe('Campaign Lifecycle API', () => {
     expect(claimRes.status).toBe(200);
     expect(claimRes.data.data.progress.status).toBe('claimed');
 
-    // Duplicate Claim is idempotent (returns 200 with the same status)
+    // Verify no duplicate claim event in history
+    const historyRes = await get(`/api/campaigns/${campaignId}/history`);
+    const claimEvents = historyRes.data.events?.filter(
+      (e: { eventType: string }) => e.eventType === 'claimed',
+    );
+    expect(claimEvents?.length).toBe(1);
+
+    // Duplicate Claim returns 409 Conflict
     const duplicateClaimRes = await post(`/api/campaigns/${campaignId}/claim`, {
       creator: CREATOR,
-      transactionHash: 'a'.repeat(64),
+      transactionHash: 'b'.repeat(64),
       confirmedAt: Math.floor(Date.now() / 1000),
     });
-    expect(duplicateClaimRes.status).toBe(200);
+    expect(duplicateClaimRes.status).toBe(409);
+    expect(duplicateClaimRes.data.error.code).toBe('CAMPAIGN_ALREADY_CLAIMED');
+    expect(duplicateClaimRes.data.error.message).toContain('already claimed');
+
+    // Verify claim event still not duplicated
+    const historyRes2 = await get(`/api/campaigns/${campaignId}/history`);
+    const claimEvents2 = historyRes2.data.events?.filter(
+      (e: { eventType: string }) => e.eventType === 'claimed',
+    );
+    expect(claimEvents2?.length).toBe(1);
   });
 
   it('covers create, pledge, failed, refund end-to-end', async () => {

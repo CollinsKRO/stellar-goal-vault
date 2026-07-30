@@ -1046,7 +1046,7 @@ function reconcileOnChainClaim(campaignId: string, input: ReconciledClaimInput):
   }
 
   if (campaign.claimedAt) {
-    return campaign;
+    throw toServiceError('Campaign already claimed.', 409, 'CAMPAIGN_ALREADY_CLAIMED');
   }
 
   const progress = calculateProgress(campaign);
