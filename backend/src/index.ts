@@ -31,6 +31,7 @@ import {
   getCampaignWithProgress,
   getContributorSummary,
   getGlobalStats,
+  getTrendingCampaigns,
   getTopContributors,
   initCampaignStore,
   listCampaignPledges,
@@ -68,6 +69,8 @@ import { logError, logInfo } from './logger';
 import {
   buildCampaignCacheKey,
   getCampaignCacheEntry,
+  getTrendingCacheEntry,
+  setTrendingCacheEntry,
   invalidateCampaignCache,
   setCampaignCacheEntry,
 } from './services/campaignCache';
@@ -459,6 +462,28 @@ app.get('/api/campaigns', (req: Request, res: Response) => {
   res.setHeader('Cache-Control', 'max-age=5');
   res.setHeader('X-Cache', 'MISS');
   res.setHeader('X-Total-Count', String(totalCount));
+  res.setHeader('Content-Type', 'application/json');
+  res.send(responseBody);
+});
+
+app.get('/api/campaigns/trending', (req: Request, res: Response) => {
+  const cached = getTrendingCacheEntry();
+  if (cached) {
+    res.setHeader('X-Cache', 'HIT');
+    res.setHeader('Content-Type', 'application/json');
+    res.send(cached);
+    return;
+  }
+
+  const campaigns = getTrendingCampaigns(10);
+
+  const responseBody = JSON.stringify({
+    data: campaigns,
+  });
+
+  setTrendingCacheEntry(responseBody);
+
+  res.setHeader('X-Cache', 'MISS');
   res.setHeader('Content-Type', 'application/json');
   res.send(responseBody);
 });

@@ -1317,6 +1317,67 @@ export function updateCampaignMetadata(campaignId: string, newMetadata: string):
   );
 }
 
+export interface TrendingCampaignEntry {
+  campaign: CampaignRecord;
+  progress: CampaignProgress;
+  pledgeVelocity: number; // pledges in last 24h / hours the campaign has been open
+  recentPledgeCount: number; // raw count of non-refunded pledges in last 24h
+}
+
+/**
+ * Returns the top 10 open campaigns ranked by pledge velocity.
+ *
+ * Velocity = (non-refunded pledges in last 24h) / hours the campaign has been open.
+ * Only campaigns that are currently open (not funded, claimed, or failed) are included.
+ *
+ * @param limit - Maximum number of trending campaigns to return (default: 10).
+ * @returns An array of {@link TrendingCampaignEntry} objects sorted by velocity descending.
+ */
+export function getTrendingCampaigns(limit = 10): TrendingCampaignEntry[] {
+  const db = getDb();
+  const now = nowInSeconds();
+  const window24h = now - 86400; // 24 hours ago in unix seconds
+
+  // Fetch open campaigns with their 24h pledge counts in one query.
+  // "Open" = deadline in the future, not claimed, not yet at target (funded).
+  // deleted_at IS NULL is always enforced.
+  const rows = db
+    .prepare(
+      `SELECT
+         c.*,
+         COUNT(p.id) AS recent_pledge_count
+       FROM campaigns c
+       LEFT JOIN pledges p
+         ON p.campaign_id = c.id
+         AND p.refunded_at IS NULL
+         AND p.created_at >= ?
+       WHERE c.deleted_at IS NULL
+         AND c.claimed_at IS NULL
+         AND c.pledged_amount < c.target_amount
+         AND c.deadline > ?
+       GROUP BY c.id
+       ORDER BY recent_pledge_count DESC, c.pledged_amount DESC
+       LIMIT ?`,
+    )
+    .all(window24h, now, limit) as Array<CampaignRow & { recent_pledge_count: number }>;
+
+  return rows.map((row) => {
+    const { recent_pledge_count, ...campaignRow } = row;
+    const campaign = rowToCampaign(campaignRow as CampaignRow);
+
+    // hoursOpen: at least 1 hour floor to avoid division-by-zero on brand-new campaigns
+    const hoursOpen = Math.max(1, (now - campaign.createdAt) / 3600);
+    const pledgeVelocity = Number((recent_pledge_count / hoursOpen).toFixed(4));
+
+    return {
+      campaign,
+      progress: calculateProgress(campaign, now),
+      pledgeVelocity,
+      recentPledgeCount: recent_pledge_count,
+    };
+  });
+}
+
 export function getTopContributors(limit: number = 10): LeaderboardEntry[] {
   const db = getDb();
   const rows = db
