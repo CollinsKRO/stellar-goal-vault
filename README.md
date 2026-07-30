@@ -20,6 +20,8 @@ Contributors can pledge until the deadline:
 
 This repo is intentionally scoped as an MVP so it is easy to extend with wallet signing, event indexing, and production-grade UX.
 
+> **📚 Documentation index:** See [INDEX.md](./INDEX.md) for a complete map of every documentation file in the repository, organized by topic.
+
 ## Current architecture
 
 Frontend (`frontend`, port `3000`)
@@ -412,10 +414,42 @@ Open:
 - Frontend: `http://localhost:3000`
 - Backend: `http://localhost:3001`
 
-Build:
+### Seed the dev database
+
+Wipes and repopulates the local SQLite database with deterministic campaigns and pledges — useful for a fresh, reproducible local state.
 
 ```bash
-npm run build
+cd backend
+npm run seed
+
+# Seed a custom number of campaigns (default: 3)
+npm run seed -- --count 10
+```
+
+Seeded campaign IDs are printed to stdout. The first 3 campaigns always match a fixed
+set (open, funded, claimed status). Any additional campaigns beyond that cycle
+deterministically through open/funded/claimed statuses so the seed is reproducible run to run.
+
+Build:eed the dev database
++
++Wipes and repopulates the local SQLite database with deterministic campaigns and pledges — useful for a fresh, reproducible local state.
++
++```bash
++cd backend
++npm run seed
++
++# Seed a custom number of campaigns (default: 3)
++npm run seed -- --count 10
++```
++
++Seeded campaign IDs are printed to stdout. The first 3 campaigns always match a fixed
++set (open, funded, claimed status). Any additional campaigns beyond that cycle
++deterministically through open/funded/claimed statuses so the seed is reproducible run to run.
++
+ Build:
+ 
+```bash
+ npm run build
 ```
 
 ### Local development with Docker (hot-reload)
@@ -540,7 +574,11 @@ That issue is already represented in:
 
 ## Frequently Asked Questions
 
-See the [FAQ.md](./FAQ.md) for answers to common questions about testnet funding, Freighter setup, contract deployment, database reset, pledge failures, and more.
+See [FAQ.md](./FAQ.md) for 22 Q&A entries covering campaign creation, pledging, refunds, supported wallets, fees, mainnet support, and local development — organized into **For Creators**, **For Backers**, and **Technical** sections.
+
+## Troubleshooting
+
+See the [Troubleshooting Guide](./docs/TROUBLESHOOTING.md) for solutions to common issues like SQLite permissions, Soroban CLI mismatches, and CORS errors.
 
 ## Security
 
