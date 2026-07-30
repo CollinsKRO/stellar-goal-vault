@@ -1,56 +1,91 @@
 import { Request, Response, NextFunction } from "express";
 import { AppError } from "../types/errors";
+import { validateApiKey, isReadOnlyKey, type ApiKeyRecord } from "../services/apiKeyStore";
 
 export interface RequestWithApiKey extends Request {
   apiKey?: string;
   isAuthenticated?: boolean;
+  apiKeyRecord?: ApiKeyRecord;
+  isReadOnly?: boolean;
 }
+
+// Paths that are always public (don't require any authentication)
+const PUBLIC_PATHS = [
+  "/api/health",
+  "/api/config",
+  "/api/stats",
+  "/api/leaderboard",
+  "/api/open-issues",
+  "/api/openapi.json",
+  // API key management routes are excluded from auth
+  "/api/api-keys",
+];
+
+// Paths that require read-write access (mutation endpoints)
+const WRITE_METHODS = ["POST", "PUT", "PATCH", "DELETE"];
+const READ_WRITE_PATHS = [
+  "/api/campaigns",
+  "/api/pledges",
+];
 
 /**
  * API Key authentication middleware.
- * Validates API key from Authorization header (Bearer token format).
- * Skips authentication for public endpoints (health, config, stats, leaderboard, open-issues).
- *
- * Environment variable: API_KEYS (comma-separated list of valid API keys)
- * Header format: Authorization: Bearer <api-key>
+ * Supports both X-API-Key header and Authorization: Bearer header formats.
+ * Validates API key against database (new) or environment variable (legacy).
+ * Skips authentication for public endpoints.
  */
 export function apiKeyAuthMiddleware(
   req: RequestWithApiKey,
   res: Response,
   next: NextFunction,
 ): void {
-  // Public endpoints that don't require authentication
-  const publicPaths = [
-    "/api/health",
-    "/api/config",
-    "/api/stats",
-    "/api/leaderboard",
-    "/api/open-issues",
-  ];
-
   // Check if current path is public
-  const isPublicPath = publicPaths.some((path) => req.path.startsWith(path));
+  const isPublicPath = PUBLIC_PATHS.some((path) => req.path.startsWith(path));
 
   if (isPublicPath) {
     req.isAuthenticated = true;
     return next();
   }
 
-  // Extract API key from Authorization header
+  // Extract API key from X-API-Key header or Authorization header
+  const apiKeyHeader = req.headers["x-api-key"] as string | undefined;
   const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+  const bearerKey = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : undefined;
+  const apiKey = apiKeyHeader || bearerKey;
+
+  if (!apiKey) {
     throw new AppError(
-      "Missing or invalid Authorization header. Use format: Bearer <api-key>",
+      "Missing API key. Provide via X-API-Key header or Authorization: Bearer <api-key>",
       401,
       "UNAUTHORIZED",
     );
   }
 
-  const apiKey = authHeader.slice(7); // Remove "Bearer " prefix
+  // Try to validate against database (new API key management)
+  const dbKeyRecord = validateApiKey(apiKey);
+  if (dbKeyRecord) {
+    req.isAuthenticated = true;
+    req.apiKey = apiKey;
+    req.apiKeyRecord = dbKeyRecord;
+    req.isReadOnly = isReadOnlyKey(dbKeyRecord);
+
+    // Check if read-only key is being used for mutation
+    if (req.isReadOnly && isMutationRequest(req)) {
+      throw new AppError(
+        "Read-only API key cannot perform mutation operations.",
+        403,
+        "FORBIDDEN",
+      );
+    }
+
+    return next();
+  }
+
+  // Fallback to legacy environment variable API keys
   const validApiKeys = (process.env.API_KEYS || "").split(",").filter(Boolean);
 
   if (validApiKeys.length === 0) {
-    // If no API keys configured, allow all requests (development mode)
+    // If no API keys configured anywhere, allow all requests (development mode)
     req.isAuthenticated = true;
     req.apiKey = apiKey;
     return next();
@@ -63,4 +98,16 @@ export function apiKeyAuthMiddleware(
   req.isAuthenticated = true;
   req.apiKey = apiKey;
   next();
+}
+
+/**
+ * Determines if the request is a mutation (write) operation.
+ */
+function isMutationRequest(req: Request): boolean {
+  if (!WRITE_METHODS.includes(req.method)) {
+    return false;
+  }
+
+  // Check if the path matches a read-write path
+  return READ_WRITE_PATHS.some((path) => req.path.startsWith(path));
 }

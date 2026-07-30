@@ -68,6 +68,12 @@ import {
   invalidateCampaignCache,
   setCampaignCacheEntry,
 } from './services/campaignCache';
+import {
+  createApiKey,
+  listApiKeys,
+  revokeApiKey,
+  type ApiKeyScope,
+} from './services/apiKeyStore';
 export const app = express();
 
 type CampaignListItem = CampaignRecord & { progress: CampaignProgress };
@@ -673,6 +679,77 @@ app.get('/api/campaigns/:id/history', (req: Request, res: Response) => {
 app.get('/api/open-issues', async (_req: Request, res: Response) => {
   const data = await fetchOpenIssues();
   res.json({ data });
+});
+
+// API Key Management Routes
+// Note: These routes are excluded from API key authentication to allow key management
+
+const createApiKeySchema = z.object({
+  name: z.string().min(1).max(100),
+  scope: z.enum(['read-only', 'read-write']),
+  expiresInDays: z.number().int().positive().optional(),
+});
+
+app.post('/api/api-keys', validateBody(createApiKeySchema), (req: Request, res: Response) => {
+  const parsed = createApiKeySchema.safeParse(req.body);
+  if (!parsed.success) {
+    sendValidationError(parsed.error.issues);
+  }
+
+  const { name, scope, expiresInDays } = parsed.data;
+
+  const newKey = createApiKey({
+    name,
+    scope: scope as ApiKeyScope,
+    expiresInDays,
+  });
+
+  logInfo('api_key_created', { keyId: newKey.id, name, scope }, config.logLevel);
+
+  res.status(201).json({
+    data: {
+      id: newKey.id,
+      name: newKey.name,
+      keyPrefix: newKey.keyPrefix,
+      plainKey: newKey.plainKey,
+      scope: newKey.scope,
+      createdAt: newKey.createdAt,
+      expiresAt: newKey.expiresAt,
+    },
+  });
+});
+
+app.get('/api/api-keys', (_req: Request, res: Response) => {
+  const keys = listApiKeys();
+
+  res.json({
+    data: keys.map((key) => ({
+      id: key.id,
+      name: key.name,
+      keyPrefix: key.keyPrefix,
+      scope: key.scope,
+      createdAt: key.createdAt,
+      expiresAt: key.expiresAt,
+      lastUsedAt: key.lastUsedAt,
+    })),
+  });
+});
+
+app.delete('/api/api-keys/:id', (req: Request, res: Response) => {
+  const { id } = req.params;
+
+  if (!id || typeof id !== 'string') {
+    throw new AppError('API key ID is required', 400, 'VALIDATION_ERROR');
+  }
+
+  const revoked = revokeApiKey(id);
+  if (!revoked) {
+    throw new AppError('API key not found or already revoked', 404, 'NOT_FOUND');
+  }
+
+  logInfo('api_key_revoked', { keyId: id }, config.logLevel);
+
+  res.status(204).send();
 });
 
 app.get('/api/config', (_req: Request, res: Response) => {

@@ -256,4 +256,42 @@ database.exec(`
     CREATE INDEX IF NOT EXISTS idx_campaign_events_ledger
     ON campaign_events(json_extract(blockchain_metadata, '$.ledgerNumber'));
   `);
+
+  // Migration for API keys table
+  const apiKeyColumns = database.prepare(`PRAGMA table_info(api_keys)`).all() as Array<{
+    name: string;
+  }>;
+
+  if (apiKeyColumns.length === 0) {
+    database.exec(`
+      CREATE TABLE IF NOT EXISTS api_keys (
+        id                TEXT PRIMARY KEY,
+        name              TEXT NOT NULL,
+        key_prefix        TEXT NOT NULL,
+        key_hash          TEXT NOT NULL,
+        scope             TEXT NOT NULL DEFAULT 'read-write',
+        created_at        INTEGER NOT NULL,
+        expires_at        INTEGER,
+        revoked_at        INTEGER,
+        last_used_at      INTEGER
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_api_keys_prefix ON api_keys(key_prefix);
+      CREATE INDEX IF NOT EXISTS idx_api_keys_revoked ON api_keys(revoked_at);
+    `);
+  } else {
+    // Ensure all columns exist for older migrations
+    if (!apiKeyColumns.some((col) => col.name === 'scope')) {
+      database.exec(`ALTER TABLE api_keys ADD COLUMN scope TEXT NOT NULL DEFAULT 'read-write'`);
+    }
+    if (!apiKeyColumns.some((col) => col.name === 'expires_at')) {
+      database.exec(`ALTER TABLE api_keys ADD COLUMN expires_at INTEGER`);
+    }
+    if (!apiKeyColumns.some((col) => col.name === 'revoked_at')) {
+      database.exec(`ALTER TABLE api_keys ADD COLUMN revoked_at INTEGER`);
+    }
+    if (!apiKeyColumns.some((col) => col.name === 'last_used_at')) {
+      database.exec(`ALTER TABLE api_keys ADD COLUMN last_used_at INTEGER`);
+    }
+  }
 }
