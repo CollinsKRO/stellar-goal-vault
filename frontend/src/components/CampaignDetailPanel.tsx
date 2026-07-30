@@ -1,7 +1,11 @@
 
 
+
+
+
 import { FormEvent, useState, useEffect } from 'react';
-import { MousePointer2 } from 'lucide-react';
+import { MousePointer2, AlertCircle } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { Campaign, AppConfig } from '../types/campaign';
 import CopyButton from './CopyButton';
 import { AddressAvatar } from './AddressAvatar';
@@ -16,6 +20,7 @@ interface CampaignDetailPanelProps {
   isConnectingWallet?: boolean;
   isLoading?: boolean;
   isPledgePending?: boolean;
+  notFoundCampaignId?: string | null;
   onConnectWallet?: () => Promise<void>;
   onDisconnectWallet?: () => void;
   onPledge?: (campaignId: string, amount: number, assetCode: string) => Promise<void>;
@@ -66,6 +71,7 @@ export function CampaignDetailPanel({
   isConnectingWallet = false,
   isLoading = false,
   isPledgePending = false,
+  notFoundCampaignId = null,
   onConnectWallet = async () => {},
   onDisconnectWallet = () => {},
   onPledge = async () => {},
@@ -104,6 +110,24 @@ export function CampaignDetailPanel({
               />
             </article>
           ))}
+        </div>
+      </section>
+    );
+  }
+
+  if (notFoundCampaignId) {
+    return (
+      <section className="card detail-panel">
+        <div className="section-heading">
+          <h2>Campaign not found</h2>
+          <p className="muted">
+            The campaign <code>#{notFoundCampaignId}</code> does not exist or may have been removed.
+          </p>
+        </div>
+        <div style={{ marginTop: 24 }}>
+          <Link to="/" className="btn-ghost">
+            Back to campaigns
+          </Link>
         </div>
       </section>
     );
