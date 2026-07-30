@@ -12,6 +12,7 @@ import { AddressAvatar } from './AddressAvatar';
 import { EmptyState } from './EmptyState';
 import { ContributorSummary } from './ContributorSummary';
 import { CampaignImage } from './CampaignImage';
+import { useMinDisplayTime } from '../hooks/useMinDisplayTime';
 
 interface CampaignDetailPanelProps {
   campaign: Campaign | null;
@@ -91,9 +92,10 @@ export function CampaignDetailPanel({
 
 
 
-  if (isLoading) {
+  const showSkeleton = useMinDisplayTime(isLoading);
+  if (showSkeleton) {
     return (
-      <section className="card detail-panel">
+      <section className="card detail-panel" aria-busy="true" aria-label="Loading campaign details">
         <div className="section-heading">
           <h2>
             <div className="skeleton skeleton-line" style={{ width: 220 }} />
@@ -101,7 +103,7 @@ export function CampaignDetailPanel({
           <div className="skeleton skeleton-line" style={{ width: 320, height: 14 }} />
         </div>
         <div className="detail-grid">
-          {Array.from({ length: 4 }).map((_, index) => (
+          {Array.from({ length: 5 }).map((_, index) => (
             <article key={index} className="detail-stat">
               <div className="skeleton skeleton-line" style={{ width: 120 }} />
               <div
