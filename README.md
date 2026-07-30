@@ -542,6 +542,10 @@ That issue is already represented in:
 
 See the [FAQ.md](./FAQ.md) for answers to common questions about testnet funding, Freighter setup, contract deployment, database reset, pledge failures, and more.
 
+## Troubleshooting
+
+See the [Troubleshooting Guide](./docs/TROUBLESHOOTING.md) for solutions to common issues like SQLite permissions, Soroban CLI mismatches, and CORS errors.
+
 ## Security
 
 Please see [SECURITY.md](./SECURITY.md) for our responsible disclosure policy, supported versions, and reporting instructions.
