@@ -3,6 +3,7 @@ import { Link } from 'lucide-react';
 import { Campaign } from '../types/campaign';
 import AddressAvatar from './AddressAvatar';
 import CopyButton from './CopyButton';
+import { Countdown } from './Countdown';
 
 interface CampaignCardProps {
   campaign: Campaign;
@@ -29,8 +30,6 @@ function CampaignCardInner({ campaign, selectedCampaignId, onSelect }: CampaignC
   useEffect(() => {
     setImageError(false);
   }, [campaign.id]);
-
-  const formatTimestamp = (unixSeconds: number) => new Date(unixSeconds * 1000).toLocaleString();
 
   const handleShareCampaign = () => {
     const deepLinkUrl = `${window.location.origin}${window.location.pathname}?campaign=${campaign.id}`;
@@ -163,7 +162,7 @@ function CampaignCardInner({ campaign, selectedCampaignId, onSelect }: CampaignC
           <span className={`badge badge-${campaign.progress.status}`}>
             {campaign.progress.status}
           </span>
-          <div className="muted">{formatTimestamp(campaign.deadline)}</div>
+          <div className="muted"><Countdown deadline={campaign.deadline} /></div>
         </div>
       </div>
 

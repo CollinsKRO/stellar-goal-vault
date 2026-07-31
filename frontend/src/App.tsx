@@ -6,6 +6,7 @@ import { FundedConfetti } from "./components/FundedConfetti";
 import { KeyboardShortcutsOverlay } from "./components/KeyboardShortcutsOverlay";
 import { CampaignsTable } from "./components/CampaignsTable";
 import { CampaignTimeline } from "./components/CampaignTimeline";
+import { NotificationBell } from "./components/NotificationBell";
 import { CreateCampaignForm } from "./components/CreateCampaignForm";
 import { CreatorAnalytics } from "./components/CreatorAnalytics";
 import { IssueBacklog } from "./components/IssueBacklog";
@@ -38,6 +39,8 @@ import { submitRefundTransaction } from "./services/soroban";
 import { useWallet } from "./hooks/useWallet";
 import { useLocalStorage } from "./hooks/useLocalStorage";
 import { useToast } from "./hooks/useToast";
+import { useOpenGraph } from "./hooks/useOpenGraph";
+import { useCampaignShareCard } from "./components/CampaignShareCard";
 import { didCampaignBecomeFunded } from "./lib/fundingCelebration";
 import {
   ApiError,
@@ -331,6 +334,8 @@ function App() {
     await Promise.all([refreshHistory(campaignId), refreshSelectedCampaign(campaignId)]);
   }
 
+  const { toDataUrl } = useCampaignShareCard();
+
   const initialParamIdRef = useRef(paramId);
 
   useEffect(() => {
@@ -432,6 +437,20 @@ function App() {
       metadata: selectedCampaignDetails.metadata ?? summaryCampaign.metadata,
     };
   }, [campaigns, selectedCampaignDetails, selectedCampaignId]);
+
+  const ogMeta = useMemo(() => {
+    const c = selectedCampaign;
+    if (!c) return null;
+    const baseUrl = window.location.origin;
+    return {
+      title: `${c.title} — Stellar Goal Vault`,
+      description: c.description.slice(0, 200),
+      image: c.metadata?.imageUrl ?? undefined,
+      url: `${baseUrl}/campaigns/${c.id}`,
+    };
+  }, [selectedCampaign]);
+
+  useOpenGraph(ogMeta);
 
   const metrics = useMemo(() => {
     const open = campaigns.filter((campaign) => campaign.progress.status === "open").length;
@@ -676,6 +695,7 @@ function App() {
               onDisconnect={handleDisconnectWallet}
               onSwitchWallet={wallet.openPicker}
             />
+            <NotificationBell wallet={connectedWallet} campaignId={selectedCampaignId} />
             <button className="btn-ghost" type="button" onClick={handleThemeToggle}>
               {themeMode === "dark" ? "Light mode" : "Dark mode"}
             </button>

@@ -46,6 +46,11 @@ import {
 import { checkDbHealth } from './services/db';
 import { getCampaignTimeline, listCampaignHistory } from './services/eventHistory';
 import { startEventIndexer } from './services/eventIndexer';
+import {
+  listNotifications,
+  getUnreadCount,
+  markAllRead,
+} from './services/notificationService';
 import { getDeadLetterQueue, clearDeadLetterQueue, retryDeadLetter } from './services/webhookService';
 import { fetchOpenIssues } from './services/openIssues';
 import { ensureSorobanRefundConfig, verifyRefundTransaction } from './services/sorobanRpc';
@@ -852,6 +857,50 @@ app.get('/api/leaderboard', (req: Request, res: Response) => {
       },
     });
   }
+});
+
+// ── Notification Routes ───────────────────────────────────────────────────────
+
+app.get('/api/notifications', (req: Request, res: Response) => {
+  const wallet = normalizeQueryValue(req.query.wallet);
+  if (!wallet) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'MISSING_WALLET', message: 'wallet query parameter is required' },
+    });
+  }
+  const rawLimit = normalizeQueryValue(req.query.limit);
+  const rawOffset = normalizeQueryValue(req.query.offset);
+  const limit = rawLimit ? Math.min(Math.max(1, Number(rawLimit)), 100) : 50;
+  const offset = rawOffset ? Math.max(0, Number(rawOffset)) : 0;
+
+  const result = listNotifications(wallet, { limit, offset });
+  const unreadCount = getUnreadCount(wallet);
+  res.json({ data: result.data, total: result.total, unreadCount });
+});
+
+app.get('/api/notifications/unread-count', (req: Request, res: Response) => {
+  const wallet = normalizeQueryValue(req.query.wallet);
+  if (!wallet) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'MISSING_WALLET', message: 'wallet query parameter is required' },
+    });
+  }
+  const unreadCount = getUnreadCount(wallet);
+  res.json({ unreadCount });
+});
+
+app.post('/api/notifications/mark-all-read', (req: Request, res: Response) => {
+  const { wallet } = req.body as { wallet?: string };
+  if (!wallet || typeof wallet !== 'string') {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'MISSING_WALLET', message: 'wallet is required in request body' },
+    });
+  }
+  markAllRead(wallet);
+  res.json({ success: true });
 });
 
 app.get('/api/webhooks/dead-letter', (req: Request, res: Response) => {
