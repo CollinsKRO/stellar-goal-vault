@@ -638,6 +638,7 @@ registry.registerPath({
   path: '/api/campaigns/{id}/pledges',
   tags: ['Pledges'],
   summary: 'Create a pledge',
+  description: 'Creates a pledge for a campaign. Use the Idempotency-Key header to make the request idempotent. Cached responses are returned for 24 hours.',
   request: {
     params: z.object({ id: campaignIdParamSchema }),
     body: {

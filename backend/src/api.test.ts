@@ -70,7 +70,25 @@ async function post(apiPath: string, body: unknown) {
     body: JSON.stringify(body),
   });
   const data = await response.json().catch(() => null);
-  return { status: response.status, data };
+  return { status: response.status, data, headers: response.headers };
+}
+
+async function postWithHeaders(
+  apiPath: string,
+  body: unknown,
+  headers: Record<string, string>,
+) {
+  const mergedHeaders: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...headers,
+  };
+  const response = await fetch(`${baseUrl}${apiPath}`, {
+    method: 'POST',
+    headers: mergedHeaders,
+    body: JSON.stringify(body),
+  });
+  const data = await response.json().catch(() => null);
+  return { status: response.status, data, headers: response.headers };
 }
 
 async function get(apiPath: string) {
@@ -645,5 +663,170 @@ describe('GET /api/stats', () => {
       total_contributors: expect.any(Number),
       avg_funding_rate_pct: expect.any(Number),
     });
+  });
+});
+
+describe('POST /api/campaigns/:id/pledges with Idempotency-Key', () => {
+  const CONTRIBUTOR_C = `G${'D'.repeat(55)}`;
+  const CONTRIBUTOR_D = `G${'E'.repeat(55)}`;
+
+  async function createTestCampaign() {
+    const createRes = await post('/api/campaigns', {
+      creator: CREATOR,
+      title: 'Idempotency Test Campaign',
+      description: 'This campaign is used to test idempotency behavior.',
+      acceptedTokens: ['USDC'],
+      targetAmount: 500,
+      deadline: Math.floor(Date.now() / 1000) + 86400,
+    });
+    return createRes.data.data.id;
+  }
+
+  it('request with Idempotency-Key creates a pledge', async () => {
+    const campaignId = await createTestCampaign();
+
+    const res = await post(`/api/campaigns/${campaignId}/pledges`, {
+      contributor: CONTRIBUTOR_C,
+      amount: 100,
+      assetCode: 'USDC',
+    }, { 'Idempotency-Key': 'test-key-1' });
+
+    expect(res.status).toBe(201);
+    expect(res.data.data.progress.pledgeCount).toBe(1);
+  });
+
+  it('duplicate request with same Idempotency-Key returns cached response', async () => {
+    const campaignId = await createTestCampaign();
+
+    const firstRes = await post(`/api/campaigns/${campaignId}/pledges`, {
+      contributor: CONTRIBUTOR_C,
+      amount: 100,
+      assetCode: 'USDC',
+    }, { 'Idempotency-Key': 'dup-key-1' });
+    expect(firstRes.status).toBe(201);
+
+    const secondRes = await post(`/api/campaigns/${campaignId}/pledges`, {
+      contributor: CONTRIBUTOR_C,
+      amount: 100,
+      assetCode: 'USDC',
+    }, { 'Idempotency-Key': 'dup-key-1' });
+    expect(secondRes.status).toBe(201);
+    expect(secondRes.data).toEqual(firstRes.data);
+  });
+
+  it('duplicate request with same Idempotency-Key performs only one database write', async () => {
+    const campaignId = await createTestCampaign();
+
+    await post(`/api/campaigns/${campaignId}/pledges`, {
+      contributor: CONTRIBUTOR_C,
+      amount: 100,
+      assetCode: 'USDC',
+    }, { 'Idempotency-Key': 'db-write-key' });
+
+    const db = getDb();
+    const pledgeCountBefore = db.prepare('SELECT COUNT(*) AS count FROM pledges').get() as { count: number };
+
+    await post(`/api/campaigns/${campaignId}/pledges`, {
+      contributor: CONTRIBUTOR_C,
+      amount: 100,
+      assetCode: 'USDC',
+    }, { 'Idempotency-Key': 'db-write-key' });
+
+    const pledgeCountAfter = db.prepare('SELECT COUNT(*) AS count FROM pledges').get() as { count: number };
+    expect(pledgeCountAfter.count).toBe(pledgeCountBefore.count);
+  });
+
+  it('missing Idempotency-Key behaves exactly as before', async () => {
+    const campaignId = await createTestCampaign();
+
+    const res = await post(`/api/campaigns/${campaignId}/pledges`, {
+      contributor: CONTRIBUTOR_C,
+      amount: 100,
+      assetCode: 'USDC',
+    });
+    expect(res.status).toBe(201);
+    expect(res.data.data.progress.pledgeCount).toBe(1);
+  });
+
+  it('different idempotency keys create independent pledges', async () => {
+    const campaignId = await createTestCampaign();
+
+    const res1 = await post(`/api/campaigns/${campaignId}/pledges`, {
+      contributor: CONTRIBUTOR_C,
+      amount: 50,
+      assetCode: 'USDC',
+    }, { 'Idempotency-Key': 'key-A' });
+    expect(res1.status).toBe(201);
+
+    const res2 = await post(`/api/campaigns/${campaignId}/pledges`, {
+      contributor: CONTRIBUTOR_C,
+      amount: 50,
+      assetCode: 'USDC',
+    }, { 'Idempotency-Key': 'key-B' });
+    expect(res2.status).toBe(201);
+
+    const db = getDb();
+    const pledgeCount = db.prepare('SELECT COUNT(*) AS count FROM pledges').get() as { count: number };
+    expect(pledgeCount.count).toBe(2);
+  });
+
+  it('different users using the same idempotency key do not share cached responses', async () => {
+    const campaignId = await createTestCampaign();
+
+    const userARes = await post(`/api/campaigns/${campaignId}/pledges`, {
+      contributor: CONTRIBUTOR_C,
+      amount: 100,
+      assetCode: 'USDC',
+    }, { 'Idempotency-Key': 'shared-key' });
+    expect(userARes.status).toBe(201);
+    expect(userARes.data.data.progress.pledgeCount).toBe(1);
+
+    const userBRes = await post(`/api/campaigns/${campaignId}/pledges`, {
+      contributor: CONTRIBUTOR_D,
+      amount: 100,
+      assetCode: 'USDC',
+    }, { 'Idempotency-Key': 'shared-key' });
+    expect(userBRes.status).toBe(201);
+    expect(userBRes.data.data.progress.pledgeCount).toBe(2);
+  });
+
+  it('cached response preserves original status and payload', async () => {
+    const campaignId = await createTestCampaign();
+
+    const firstRes = await post(`/api/campaigns/${campaignId}/pledges`, {
+      contributor: CONTRIBUTOR_C,
+      amount: 75,
+      assetCode: 'USDC',
+    }, { 'Idempotency-Key': 'status-payload-key' });
+    expect(firstRes.status).toBe(201);
+
+    const cachedRes = await post(`/api/campaigns/${campaignId}/pledges`, {
+      contributor: CONTRIBUTOR_C,
+      amount: 75,
+      assetCode: 'USDC',
+    }, { 'Idempotency-Key': 'status-payload-key' });
+    expect(cachedRes.status).toBe(201);
+    expect(cachedRes.data.data.id).toBe(firstRes.data.data.id);
+    expect(cachedRes.data.data.amount).toBe(firstRes.data.data.amount);
+  });
+
+  it('X-Idempotency-Cache header is MISS on first request and HIT on duplicate', async () => {
+    const campaignId = await createTestCampaign();
+
+    const firstRes = await postWithHeaders(
+      `/api/campaigns/${campaignId}/pledges`,
+      { contributor: CONTRIBUTOR_C, amount: 100, assetCode: 'USDC' },
+      { 'Idempotency-Key': 'header-test-key' },
+    );
+    expect(firstRes.status).toBe(201);
+    expect(firstRes.headers.get('X-Idempotency-Cache')).toBe('MISS');
+
+    const secondRes = await postWithHeaders(
+      `/api/campaigns/${campaignId}/pledges`,
+      { contributor: CONTRIBUTOR_C, amount: 100, assetCode: 'USDC' },
+      { 'Idempotency-Key': 'header-test-key' },
+    );
+    expect(secondRes.status).toBe(201);
+    expect(secondRes.headers.get('X-Idempotency-Cache')).toBe('HIT');
   });
 });

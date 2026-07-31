@@ -39,6 +39,9 @@ export async function initRedisCache(): Promise<void> {
   } catch {
     redisClient = null;
     isConnected = false;
+  } catch {
+    redisClient = null;
+    isConnected = false;
   }
 }
 

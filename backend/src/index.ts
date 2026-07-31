@@ -596,6 +596,7 @@ app.post(
 app.post(
   '/api/campaigns/:id/pledges',
   applyRateLimit(WRITE_RATE_LIMIT_MAX_REQUESTS),
+  idempotencyMiddleware,
   validateBody(createPledgePayloadSchema),
   (req: Request, res: Response) => {
     const parsedId = parseCampaignId(req.params.id);
