@@ -2,6 +2,15 @@ import 'dotenv/config';
 import { normalizeLogLevel } from './logger';
 
 const DEFAULT_NETWORK_PASSPHRASE = 'Test SDF Network ; September 2015';
+const DEFAULT_SOROBAN_RPC_URL = 'https://soroban-testnet.stellar.org:443';
+const isProduction = process.env.NODE_ENV === 'production';
+const configuredRpcUrl = process.env.SOROBAN_RPC_URL;
+const configuredNetworkPassphrase = process.env.SOROBAN_NETWORK_PASSPHRASE;
+const useDevelopmentDefaults = !isProduction && !configuredRpcUrl && !configuredNetworkPassphrase;
+
+const hasSorobanNetworkProfile = Boolean(
+  useDevelopmentDefaults || (configuredRpcUrl && configuredNetworkPassphrase),
+);
 
 const parseOrigins = (originsStr: string): string[] => {
   return originsStr
@@ -28,7 +37,10 @@ export const config = {
     .map((value) => value.trim().toUpperCase())
     .filter(Boolean),
 
-  sorobanNetworkPassphrase: process.env.SOROBAN_NETWORK_PASSPHRASE ?? DEFAULT_NETWORK_PASSPHRASE,
+  sorobanNetworkPassphrase:
+    configuredNetworkPassphrase ?? (useDevelopmentDefaults ? DEFAULT_NETWORK_PASSPHRASE : ''),
+  sorobanRpcUrl: configuredRpcUrl ?? (useDevelopmentDefaults ? DEFAULT_SOROBAN_RPC_URL : ''),
+  contractId: process.env.CONTRACT_ID ?? '',
   assetAddresses: (
     process.env.ASSET_ADDRESSES ??
     'XLM:CDLZFC3SYJYDZT7K3SSTH3YCUY6AFMCO3Y6S3G7FEYZNVNREK7Y6CYN5,USDC:CA6WSTPZ7RRCUC6H37CQFODG763XG2HXP2G6F367VCOGGVDP32P7665E'
@@ -47,4 +59,9 @@ export const config = {
   headersTimeoutMs: parseInteger(process.env.HEADERS_TIMEOUT_MS, 66_000),
 };
 
-export const walletIntegrationReady = Boolean(config.contractId && config.sorobanRpcUrl);
+export const walletIntegrationReady = Boolean(
+  config.contractId &&
+  config.sorobanRpcUrl &&
+  config.sorobanNetworkPassphrase &&
+  hasSorobanNetworkProfile,
+);

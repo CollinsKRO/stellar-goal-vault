@@ -1,22 +1,23 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
-import { CampaignDetailPanel } from './components/CampaignDetailPanel';
-import { ErrorBoundary } from './components/ErrorBoundary';
-import { FundedConfetti } from './components/FundedConfetti';
-import { KeyboardShortcutsOverlay } from './components/KeyboardShortcutsOverlay';
-import { CampaignsTable } from './components/CampaignsTable';
-import { CampaignTimeline } from './components/CampaignTimeline';
-import { CreateCampaignForm } from './components/CreateCampaignForm';
-import { CreatorAnalytics } from './components/CreatorAnalytics';
-import { IssueBacklog } from './components/IssueBacklog';
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { CampaignDetailPanel } from "./components/CampaignDetailPanel";
+import { ErrorBoundary } from "./components/ErrorBoundary";
+import { FundedConfetti } from "./components/FundedConfetti";
+import { KeyboardShortcutsOverlay } from "./components/KeyboardShortcutsOverlay";
+import { CampaignsTable } from "./components/CampaignsTable";
+import { CampaignTimeline } from "./components/CampaignTimeline";
+import { CreateCampaignForm } from "./components/CreateCampaignForm";
+import { CreatorAnalytics } from "./components/CreatorAnalytics";
+import { IssueBacklog } from "./components/IssueBacklog";
+import { InstallPrompt } from "./components/InstallPrompt";
+import { OfflineBanner } from "./components/OfflineBanner";
 import {
   TransactionPreviewModal,
   TransactionPreviewData,
-} from './components/TransactionPreviewModal';
-import { ToastContainer } from './components/ToastContainer';
-import { WalletWidget } from './components/WalletWidget';
-import { LanguageSelector } from './components/LanguageSelector';
+} from "./components/TransactionPreviewModal";
+import { ToastContainer } from "./components/ToastContainer";
+import { WalletWidget } from "./components/WalletWidget";
+import { WalletPickerModal } from "./components/WalletPickerModal";
 import {
   claimCampaign,
   createCampaign,
@@ -32,21 +33,26 @@ import {
 import {
   submitFreighterClaim,
   submitFreighterPledge,
-  watchFreighterAccount,
-} from './services/freighter';
-import { submitRefundTransaction } from './services/soroban';
-import { useFreighter } from './hooks/useFreighter';
-import { useLocalStorage } from './hooks/useLocalStorage';
-import { useToast } from './hooks/useToast';
-import { didCampaignBecomeFunded } from './lib/fundingCelebration';
-import { ApiError, AppConfig, Campaign, CampaignEvent, OpenIssue } from './types/campaign';
+} from "./services/freighter";
+import { submitRefundTransaction } from "./services/soroban";
+import { useWallet } from "./hooks/useWallet";
+import { useLocalStorage } from "./hooks/useLocalStorage";
+import { useToast } from "./hooks/useToast";
+import { didCampaignBecomeFunded } from "./lib/fundingCelebration";
+import {
+  ApiError,
+  AppConfig,
+  Campaign,
+  CampaignEvent,
+  OpenIssue,
+} from "./types/campaign";
 
-const DEFAULT_NETWORK_PASSPHRASE = 'Test SDF Network ; September 2015';
-const MAINNET_PASSPHRASE = 'Public Global Stellar Network ; September 2015';
-const THEME_STORAGE_KEY = 'stellar-goal-vault-theme';
-const SORT_ORDER_KEY = 'stellar-goal-vault-sort-order';
-const FILTER_STATE_KEY = 'stellar-goal-vault-filter-state';
-const LIST_STATE_KEY = 'sgv-list-state';
+const DEFAULT_NETWORK_PASSPHRASE = "Test SDF Network ; September 2015";
+const MAINNET_PASSPHRASE = "Public Global Stellar Network ; September 2015";
+const THEME_STORAGE_KEY = "stellar-goal-vault-theme";
+const SORT_ORDER_KEY = "stellar-goal-vault-sort-order";
+const FILTER_STATE_KEY = "stellar-goal-vault-filter-state";
+const LIST_STATE_KEY = "sgv-list-state";
 const CAMPAIGN_PAGE_SIZE = 20;
 
 type SavedListState = {
@@ -117,13 +123,22 @@ function stellarExpertTxUrl(txHash: string, networkPassphrase: string | undefine
   return `https://stellar.expert/explorer/${network}/tx/${txHash}`;
 }
 
+function getNetworkName(networkPassphrase: string): string {
+  if (networkPassphrase === 'Test SDF Network ; September 2015') {
+    return 'Testnet';
+  }
+  if (networkPassphrase === 'Public Global Stellar Network ; September 2015') {
+    return 'Mainnet';
+  }
+  return networkPassphrase;
+}
+
 function App() {
   const { id: paramId } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const freighter = useFreighter();
-  const { t } = useTranslation();
+  const wallet = useWallet();
   const { toasts, addToast, dismiss } = useToast();
-  const connectedWallet = freighter.publicKey;
+  const connectedWallet = wallet.publicKey;
 
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [campaignPage, setCampaignPage] = useState(1);
@@ -449,35 +464,23 @@ function App() {
     }
   }
 
-  async function handleConnectWallet() {
+  async function handleConnectWallet(walletType: string) {
     const networkPassphrase = appConfig?.networkPassphrase ?? DEFAULT_NETWORK_PASSPHRASE;
     setIsConnectingWallet(true);
     try {
-      const key = await freighter.connect(networkPassphrase);
-      if (key) {
-        addToast(`Wallet connected: ${key.slice(0, 16)}...`, 'success');
-      }
+      await wallet.connect(walletType as any, networkPassphrase);
+      addToast(`Wallet connected: ${wallet.publicKey?.slice(0, 16)}...`, "success");
     } finally {
       setIsConnectingWallet(false);
     }
   }
 
   function handleDisconnectWallet() {
-    freighter.disconnect();
-    addToast('Wallet disconnected.', 'success');
+    wallet.disconnect();
+    addToast("Wallet disconnected.", "success");
   }
 
-  useEffect(() => {
-    if (!connectedWallet) return;
-    const stop = watchFreighterAccount((address) => {
-      if (address && address !== connectedWallet) {
-        addToast(`Switched to ${address.slice(0, 16)}...`, 'success');
-      } else if (!address) {
-        addToast('Wallet disconnected.', 'success');
-      }
-    });
-    return stop;
-  }, [connectedWallet, addToast]);
+  // Account watching is handled by individual wallet adapters
 
   async function handlePledge(campaignId: string, amount: number, assetCode: string) {
     if (!connectedWallet) {
@@ -527,8 +530,8 @@ function App() {
 
       await refreshSelectedData(campaignId);
       addToast(
-        `Pledge confirmed on-chain. Tx: ${transactionResult.transactionHash.slice(0, 12)}…`,
-        'success',
+        `Pledged ${amount} ${assetCode}. Tx: ${transactionResult.transactionHash.slice(0, 12)}…`,
+        "success",
         {
           href: stellarExpertTxUrl(transactionResult.transactionHash, appConfig?.networkPassphrase),
           label: 'View on Stellar Expert',
@@ -653,6 +656,8 @@ function App() {
 
   return (
     <div className="app-shell">
+      <OfflineBanner />
+      <InstallPrompt />
       {confettiBurst ? (
         <FundedConfetti
           key={confettiBurst.id}
@@ -669,14 +674,14 @@ function App() {
           </div>
           <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
             <WalletWidget
-              status={freighter.status}
-              publicKey={freighter.publicKey}
-              error={freighter.error}
+              status={wallet.status}
+              publicKey={wallet.publicKey}
+              walletName={wallet.walletName}
+              error={wallet.error}
               network={getNetworkName(appConfig?.networkPassphrase ?? DEFAULT_NETWORK_PASSPHRASE)}
-              onConnect={() => {
-                void handleConnectWallet();
-              }}
+              onConnect={wallet.openPicker}
               onDisconnect={handleDisconnectWallet}
+              onSwitchWallet={wallet.openPicker}
             />
             <button className="btn-ghost" type="button" onClick={handleThemeToggle}>
               {themeMode === 'dark' ? t('app.controls.lightMode') : t('app.controls.darkMode')}
@@ -740,6 +745,7 @@ function App() {
             isConnectingWallet={isConnectingWallet}
             isPledgePending={pendingPledgeCampaignId === selectedCampaignId}
             isLoading={isSelectedLoading || initialLoad}
+            notFoundCampaignId={invalidUrlCampaignId}
             onConnectWallet={handleConnectWallet}
             onDisconnectWallet={handleDisconnectWallet}
             onPledge={handlePledge}
@@ -807,9 +813,13 @@ function App() {
         onClose={() => setIsShortcutsOpen(false)}
       />
 
-      <footer>
-        <LanguageSelector />
-      </footer>
+      <WalletPickerModal
+        isOpen={wallet.isPickerOpen}
+        onClose={wallet.closePicker}
+        onSelectWallet={handleConnectWallet}
+        isConnecting={wallet.status === 'connecting'}
+        connectingWallet={wallet.walletType}
+      />
     </div>
   );
 }

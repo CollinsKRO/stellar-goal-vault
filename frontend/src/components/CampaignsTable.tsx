@@ -10,13 +10,14 @@ import {
   getDistinctAssetCodes,
   searchCampaigns,
   sortCampaigns,
-} from './campaignsTableUtils';
-import { SearchInput } from './SearchInput';
-import { SortDropdown, SortOption } from './SortDropdown';
-import { AddressAvatar } from './AddressAvatar';
-import { SkeletonCard } from './SkeletonCard';
-import { useWindowVirtualizer } from '@tanstack/react-virtual';
-import { useMediaQuery } from '../hooks/useMediaQuery';
+} from "./campaignsTableUtils";
+import { SearchInput } from "./SearchInput";
+import { SortDropdown, SortOption } from "./SortDropdown";
+import { AddressAvatar } from "./AddressAvatar";
+import { SkeletonCard } from "./SkeletonCard";
+import { useWindowVirtualizer } from "@tanstack/react-virtual";
+import { useMediaQuery } from "../hooks/useMediaQuery";
+import { useMinDisplayTime } from "../hooks/useMinDisplayTime";
 
 type StatusFilterValue = '' | CampaignStatus;
 
@@ -206,7 +207,8 @@ export function CampaignsTable({
     overscan: 5,
   });
 
-  if (isLoading && isEmpty) {
+  const showSkeleton = useMinDisplayTime(isLoading && isEmpty);
+  if (showSkeleton) {
     return (
       <section className="card">
         <div className="section-heading">
