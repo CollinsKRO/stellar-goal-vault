@@ -142,6 +142,31 @@ See the [Troubleshooting Guide](./docs/TROUBLESHOOTING.md) for a comprehensive l
 - TypeScript: ESLint + Prettier (pre-commit via Husky + lint-staged)
 - Rust: `cargo fmt`
 
+## Adding new open issues
+
+The `GET /api/open-issues` endpoint serves a statically seeded list of contribution ideas
+that are displayed in the frontend **Contribution Backlog** panel.
+
+To add a new issue:
+
+1. Open [`backend/src/services/openIssues.ts`](./backend/src/services/openIssues.ts).
+2. Append a new entry to the `seededIssues` array:
+   ```ts
+   {
+     id: 'SGV-4',                                    // continue the SGV-N sequence
+     title: 'Short, descriptive title',
+     labels: ['frontend', 'good first issue'],
+     summary: 'One or two sentences describing the work.',
+     complexity: 'Trivial',                          // Trivial | Medium | High
+     points: 100,                                    // 100 | 150 | 200
+   }
+   ```
+3. Match `points` to `complexity`: Trivial → 100, Medium → 150, High → 200.
+4. No migration or server restart is needed — the endpoint reads the array directly.
+
+Full endpoint documentation (example response, field table, complexity/points enum):
+[docs/API.md — GET /api/open-issues](./docs/API.md#get-apiopen-issues)
+
 ## Questions?
 
 Check the [FAQ.md](./FAQ.md) before opening an issue. If your question isn't covered there, feel free to open a GitHub Discussion.
