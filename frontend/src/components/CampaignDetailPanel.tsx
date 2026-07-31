@@ -1,7 +1,7 @@
 
 
 import { FormEvent, useState, useEffect, useCallback } from 'react';
-import { MousePointer2, Download, Link as LinkIcon, AlertCircle } from 'lucide-react';
+import { MousePointer2, Download, Link as LinkIcon } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Campaign, AppConfig } from '../types/campaign';
 import CopyButton from './CopyButton';

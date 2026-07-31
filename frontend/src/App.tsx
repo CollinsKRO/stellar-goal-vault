@@ -336,20 +336,6 @@ function App() {
 
   const { toDataUrl } = useCampaignShareCard();
 
-  const ogMeta = useMemo(() => {
-    const c = selectedCampaign;
-    if (!c) return null;
-    const baseUrl = window.location.origin;
-    return {
-      title: `${c.title} — Stellar Goal Vault`,
-      description: c.description.slice(0, 200),
-      image: c.metadata?.imageUrl ?? undefined,
-      url: `${baseUrl}/campaigns/${c.id}`,
-    };
-  }, [selectedCampaign]);
-
-  useOpenGraph(ogMeta);
-
   const initialParamIdRef = useRef(paramId);
 
   useEffect(() => {
@@ -451,6 +437,20 @@ function App() {
       metadata: selectedCampaignDetails.metadata ?? summaryCampaign.metadata,
     };
   }, [campaigns, selectedCampaignDetails, selectedCampaignId]);
+
+  const ogMeta = useMemo(() => {
+    const c = selectedCampaign;
+    if (!c) return null;
+    const baseUrl = window.location.origin;
+    return {
+      title: `${c.title} — Stellar Goal Vault`,
+      description: c.description.slice(0, 200),
+      image: c.metadata?.imageUrl ?? undefined,
+      url: `${baseUrl}/campaigns/${c.id}`,
+    };
+  }, [selectedCampaign]);
+
+  useOpenGraph(ogMeta);
 
   const metrics = useMemo(() => {
     const open = campaigns.filter((campaign) => campaign.progress.status === "open").length;

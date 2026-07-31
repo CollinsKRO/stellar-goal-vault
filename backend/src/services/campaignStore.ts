@@ -1,6 +1,6 @@
 import { getDb, initDb } from './db';
 import { getCampaignHistory, recordEvent, BlockchainMetadata } from './eventHistory';
-import { createNotification, getContributorsForCampaign } from './notificationService';
+import { createNotification } from './notificationService';
 import { dispatchWebhook } from './webhookService';
 
 export type CampaignStatus = 'open' | 'funded' | 'claimed' | 'failed';
