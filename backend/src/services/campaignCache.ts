@@ -3,7 +3,7 @@ import { LRUCache } from 'lru-cache';
 const CACHE_TTL_MS = 5_000;
 const CACHE_MAX_SIZE = Number(process.env.CAMPAIGN_CACHE_MAX_SIZE ?? 100);
 
-// Trending cache: 10 minute TTL per spec
+// Trending endpoint cache: 10 minutes TTL as per spec
 const TRENDING_CACHE_TTL_MS = 10 * 60 * 1000;
 const TRENDING_CACHE_KEY = 'trending:campaigns';
 
