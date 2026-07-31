@@ -78,7 +78,7 @@ import {
   normalizeQueryValue,
 } from './validation/schemas';
 import { generateOpenApiDocument } from './openapi';
-import { logError, logInfo } from './logger';
+import { logError, logInfo, logger } from './logger';
 import {
   buildCampaignCacheKey,
   getCampaignCacheEntry,
