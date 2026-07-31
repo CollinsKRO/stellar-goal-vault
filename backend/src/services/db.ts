@@ -117,6 +117,7 @@ function migrate(database: SQLiteDatabase): void {
       contributor       TEXT NOT NULL,
       amount            REAL NOT NULL,
       asset_code        TEXT NOT NULL,
+      token_id          TEXT,
       created_at        INTEGER NOT NULL,
       refunded_at       INTEGER,
       transaction_hash TEXT,
@@ -165,6 +166,14 @@ function migrate(database: SQLiteDatabase): void {
   if (!hasAssetCode) {
     database.exec(`ALTER TABLE pledges ADD COLUMN asset_code TEXT NOT NULL DEFAULT 'XLM'`);
   }
+
+  const hasTokenId = pledgeColumns.some((column) => column.name === 'token_id');
+  if (!hasTokenId) {
+    database.exec(`ALTER TABLE pledges ADD COLUMN token_id TEXT`);
+  }
+
+  // Backfill token_id for existing pledges where it's still NULL
+  database.exec(`UPDATE pledges SET token_id = asset_code WHERE token_id IS NULL`);
 
   // Add deleted_at column if not exists
   const campaignColumns = database.prepare(`PRAGMA table_info(campaigns)`).all() as Array<{
