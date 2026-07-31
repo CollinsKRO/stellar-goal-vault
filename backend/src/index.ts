@@ -27,6 +27,8 @@ import {
   CampaignStatus,
   claimCampaign,
   createCampaign,
+  createComment,
+  deleteComment,
   getCampaign,
   getCampaignWithProgress,
   getContributorSummary,
@@ -36,6 +38,7 @@ import {
   initCampaignStore,
   listCampaignPledges,
   listCampaigns,
+  listComments,
   type ListCampaignsOptions,
   reconcileOnChainPledge,
   refundContributor,
@@ -58,8 +61,12 @@ import { AppError, ApiErrorResponse } from './types/errors';
 import {
   campaignIdSchema,
   claimCampaignPayloadSchema,
+  commentIdSchema,
   createCampaignPayloadSchema,
+  createCommentPayloadSchema,
   createPledgePayloadSchema,
+  deleteCommentPayloadSchema,
+  parseCommentListPaginationQuery,
   parseHistoryPaginationQuery,
   parsePledgeListPaginationQuery,
   parseTimelineQuery,
@@ -79,8 +86,7 @@ import {
   setTrendingCacheEntry,
   invalidateCampaignCache,
   setCampaignCacheEntry,
-} from './services/campaignCache';
-export const app = express();
+} from './services/campaignCache';export const app = express();
 
 type CampaignListItem = CampaignRecord & { progress: CampaignProgress };
 
