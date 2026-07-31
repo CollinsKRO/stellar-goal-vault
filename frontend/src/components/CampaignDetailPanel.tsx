@@ -84,10 +84,11 @@ export function CampaignDetailPanel({
   const [refundContributor, setRefundContributor] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [pledgeError, setPledgeError] = useState<string | null>(null);
+  const [bannerImageError, setBannerImageError] = useState(false);
   const walletReady = appConfig?.walletIntegrationReady ?? false;
 
   useEffect(() => {
-
+    setBannerImageError(false);
   }, [campaign?.id, connectedWallet]);
 
 
@@ -192,6 +193,35 @@ export function CampaignDetailPanel({
 
   return (
     <section className="card detail-panel">
+      {/* Full-width Campaign Banner */}
+      <div
+        style={{
+          width: 'calc(100% + 2rem)',
+          marginLeft: '-1rem',
+          marginRight: '-1rem',
+          marginTop: '-1rem',
+          height: '240px',
+          overflow: 'hidden',
+          background: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
+          position: 'relative',
+          marginBottom: '1.5rem',
+        }}
+      >
+        {activeCampaign.metadata?.imageUrl && !bannerImageError ? (
+          <img
+            src={activeCampaign.metadata.imageUrl}
+            alt={activeCampaign.title}
+            onError={() => setBannerImageError(true)}
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              display: 'block',
+            }}
+          />
+        ) : null}
+      </div>
+
       <div className="section-heading">
         <h2>{activeCampaign.title}</h2>
         <p className="muted">{activeCampaign.description}</p>
@@ -408,10 +438,6 @@ export function CampaignDetailPanel({
           The pledge transaction is in flight. Campaign state will refresh after the backend
           reconciles the result.
         </p>
-      ) : null}
-
-      {activeCampaign.metadata?.imageUrl ? (
-        <CampaignImage url={activeCampaign.metadata.imageUrl} alt={activeCampaign.title} />
       ) : null}
 
       {activeCampaign.metadata?.externalLink ? (

@@ -16,6 +16,44 @@ export const TX_HASH_REGEX = /^[A-Fa-f0-9]{64}$/;
 // link previews, or thumbnail rendering. See `./urlSafety.ts` for the
 // full SSRF rationale and blocked-range list.
 
+/**
+ * Schema for campaign images supporting both HTTPS URLs and base64 data URLs.
+ * Base64 data URLs must be JPG or PNG format and under 2MB when decoded.
+ */
+export const imageUrlSchema = z
+  .string()
+  .trim()
+  .refine(
+    (value) => {
+      if (value.startsWith('data:')) {
+        // Validate base64 data URL
+        const dataUrlMatch = value.match(/^data:image\/(jpeg|png);base64,(.+)$/);
+        if (!dataUrlMatch) {
+          return false;
+        }
+        
+        // Estimate decoded size (base64 adds ~33% overhead)
+        // A base64 string of length N encodes roughly N * 0.75 bytes
+        const base64Data = dataUrlMatch[2];
+        const estimatedBytes = (base64Data.length * 3) / 4;
+        const maxBytes = 2 * 1024 * 1024; // 2MB
+        
+        return estimatedBytes <= maxBytes;
+      }
+      
+      // For HTTPS URLs, delegate to httpsOnlyUrlSchema
+      try {
+        httpsOnlyUrlSchema.parse(value);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    {
+      message: 'Image must be a valid HTTPS URL or a base64 data URL (JPG/PNG, max 2MB)',
+    },
+  );
+
 export const campaignIdSchema = z
   .string()
   .trim()
@@ -88,9 +126,10 @@ export const createCampaignPayloadSchema = z.object({
   // shared `httpsOnlyUrlSchema` enforces HTTPS-only and rejects host
   // literals that target private/loopback CIDRs. Pair with
   // `assertSafeRemoteUrl` whenever the backend actually fetches these.
+  // imageUrl now also accepts base64 data URLs for direct uploads.
   metadata: z
     .object({
-      imageUrl: httpsOnlyUrlSchema.optional(),
+      imageUrl: imageUrlSchema.optional(),
       externalLink: httpsOnlyUrlSchema.optional(),
     })
     .optional(),

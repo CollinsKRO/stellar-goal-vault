@@ -64,6 +64,8 @@ const INITIAL_VALUES: WizardValues = {
   deadlineHours: '72',
   maxPerContributor: '',
   imageUrl: '',
+  imageFile: null as File | null,
+  imagePreview: '',
   externalLink: '',
   rewardTiers: [],
 };
@@ -278,6 +280,9 @@ export function CreateCampaignForm({
     try {
       const deadline = Math.floor(Date.now() / 1000) + Number(values.deadlineHours) * 3600;
 
+      // Use uploaded image (base64) if available, otherwise fall back to URL
+      const finalImageUrl = values.imagePreview || values.imageUrl.trim() || undefined;
+
       await onCreate({
         creator: values.creator.trim(),
         title: values.title.trim(),
@@ -286,7 +291,7 @@ export function CreateCampaignForm({
         targetAmount: Number(values.targetAmount),
         deadline,
         metadata: {
-          imageUrl: values.imageUrl.trim() || undefined,
+          imageUrl: finalImageUrl,
           externalLink: values.externalLink.trim() || undefined,
         },
         maxPerContributor: values.maxPerContributor.trim()
