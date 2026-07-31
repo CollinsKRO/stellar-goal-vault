@@ -9,6 +9,8 @@ import { CampaignTimeline } from "./components/CampaignTimeline";
 import { CreateCampaignForm } from "./components/CreateCampaignForm";
 import { CreatorAnalytics } from "./components/CreatorAnalytics";
 import { IssueBacklog } from "./components/IssueBacklog";
+import { InstallPrompt } from "./components/InstallPrompt";
+import { OfflineBanner } from "./components/OfflineBanner";
 import {
   TransactionPreviewModal,
   TransactionPreviewData,
@@ -647,6 +649,8 @@ function App() {
 
   return (
     <div className="app-shell">
+      <OfflineBanner />
+      <InstallPrompt />
       {confettiBurst ? (
         <FundedConfetti
           key={confettiBurst.id}
