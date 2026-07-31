@@ -483,21 +483,18 @@ if (options?.searchQuery && options.searchQuery.trim()) {
     void _pledgeCount;
 
     const now = nowInMilliseconds();
-    if (
-      campaignRow.claimed_at === null &&
-      campaignRow.pledged_amount < campaignRow.target_amount &&
-      now > campaignRow.deadline * 1000 &&
-      campaignRow.failed_at === null
-    ) {
-        campaignRow.failed_at = campaignRow.deadline;
-        db.prepare(`UPDATE campaigns SET failed_at = ? WHERE id = ?`).run(campaignRow.deadline, campaignRow.id);
-        void dispatchWebhook('campaign_failed', campaignRow.id, {
-          pledgedAmount: campaignRow.pledged_amount,
-          targetAmount: campaignRow.target_amount,
-          deadline: campaignRow.deadline,
-        });
+    const failResult = db.prepare(
+      `UPDATE campaigns SET failed_at = ? WHERE id = ? AND failed_at IS NULL AND claimed_at IS NULL AND pledged_amount < target_amount AND deadline * 1000 < ?`,
+    ).run(campaignRow.deadline, campaignRow.id, now);
+    if (failResult.changes === 1) {
+      campaignRow.failed_at = campaignRow.deadline;
+      void dispatchWebhook('campaign_failed', campaignRow.id, {
+        pledgedAmount: campaignRow.pledged_amount,
+        targetAmount: campaignRow.target_amount,
+        deadline: campaignRow.deadline,
+      });
     }
-    
+
     return rowToCampaign(campaignRow as CampaignRow);
   });
 
@@ -522,19 +519,16 @@ export function getCampaign(campaignId: string): CampaignRecord | undefined {
 
   if (row) {
     const now = nowInMilliseconds();
-    if (
-      row.claimed_at === null &&
-      row.pledged_amount < row.target_amount &&
-      now > row.deadline * 1000 &&
-      row.failed_at === null
-    ) {
-        row.failed_at = row.deadline;
-        db.prepare(`UPDATE campaigns SET failed_at = ? WHERE id = ?`).run(row.deadline, row.id);
-        void dispatchWebhook('campaign_failed', row.id, {
-          pledgedAmount: row.pledged_amount,
-          targetAmount: row.target_amount,
-          deadline: row.deadline,
-        });
+    const failResult = db.prepare(
+      `UPDATE campaigns SET failed_at = ? WHERE id = ? AND failed_at IS NULL AND claimed_at IS NULL AND pledged_amount < target_amount AND deadline * 1000 < ?`,
+    ).run(row.deadline, row.id, now);
+    if (failResult.changes === 1) {
+      row.failed_at = row.deadline;
+      void dispatchWebhook('campaign_failed', row.id, {
+        pledgedAmount: row.pledged_amount,
+        targetAmount: row.target_amount,
+        deadline: row.deadline,
+      });
     }
     const campaign = rowToCampaign(row);
     campaign.tokenBalances = getCampaignTokenBalances(campaignId);
@@ -764,9 +758,19 @@ export function addPledge(campaignId: string, input: PledgeInput): CampaignRecor
   const assetCode = (input.assetCode || campaign.assetCode).toUpperCase();
   const tokenId = input.tokenId || assetCode;
 
-  if (!campaign.acceptedTokens.includes(assetCode)) {
+  const isTokenAccepted = campaign.acceptedTokens.some((accepted) => {
+    // Direct canonical token ID match (CODE:ISSUER or contract address)
+    if (accepted === tokenId) return true;
+    // If accepted entry has no issuer component (legacy asset-code-only), fall back to assetCode
+    if (!accepted.includes(':')) {
+      return accepted === assetCode;
+    }
+    // Match by asset code portion of canonical ID for backward compatibility
+    return accepted.split(':')[0] === assetCode;
+  });
+  if (!isTokenAccepted) {
     throw toServiceError(
-      `Asset ${assetCode} is not accepted by this campaign.`,
+      `Token ${tokenId} is not accepted by this campaign.`,
       400,
       'INVALID_ASSET',
     );
@@ -897,15 +901,33 @@ export function reconcileOnChainPledge(
     throw toServiceError('Campaign not found.', 404, 'NOT_FOUND');
   }
 
+  const db = getDb();
+  const createdAt = input.confirmedAt ?? nowInSeconds();
+  const roundedAmount = round(input.amount);
+  const assetCode = (input.assetCode || campaign.assetCode).toUpperCase();
+  const tokenId = input.tokenId || assetCode;
+
+  const isTokenAccepted = campaign.acceptedTokens.some((accepted) => {
+    if (accepted === tokenId) return true;
+    if (!accepted.includes(':')) {
+      return accepted === assetCode;
+    }
+    return accepted.split(':')[0] === assetCode;
+  });
+  if (!isTokenAccepted) {
+    throw toServiceError(
+      `Token ${tokenId} is not accepted by this campaign.`,
+      400,
+      'INVALID_ASSET',
+    );
+  }
+
   const progress = calculateProgress(campaign);
   if (!progress.canPledge) {
     throw toServiceError('Campaign is no longer accepting pledges.', 400, 'INVALID_CAMPAIGN_STATE');
   }
 
-  const db = getDb();
-  const createdAt = input.confirmedAt ?? nowInSeconds();
-  const roundedAmount = round(input.amount);
-  const assetCode = (input.assetCode || campaign.assetCode).toUpperCase();
+
 
   const insertedNewPledge = db.transaction(() => {
     // Re-check contributor limit within transaction to prevent race conditions
@@ -1028,7 +1050,8 @@ export function getGlobalStats(at = nowInMilliseconds()): GlobalStats {
         SUM(CASE WHEN claimed_at IS NULL AND pledged_amount >= target_amount THEN 1 ELSE 0 END) AS funded_count,
         SUM(CASE WHEN claimed_at IS NULL AND pledged_amount < target_amount AND deadline * 1000 < ? THEN 1 ELSE 0 END) AS failed_count,
         SUM(CASE WHEN claimed_at IS NULL AND pledged_amount < target_amount AND deadline * 1000 >= ? THEN 1 ELSE 0 END) AS open_count,
-        COALESCE(SUM(pledged_amount), 0) AS total_pledged
+        COALESCE(SUM(pledged_amount), 0) AS total_pledged,
+        COALESCE(AVG(CASE WHEN target_amount > 0 THEN (pledged_amount / target_amount) * 100 ELSE NULL END), 0) AS avg_funding_rate_pct
       FROM campaigns`,
     )
     .get(at, at) as {
