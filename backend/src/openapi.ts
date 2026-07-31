@@ -312,13 +312,21 @@ const configResponseSchema = z
 const statsResponseSchema = z
   .object({
     data: z.object({
-      totalCampaigns: z.number().int(),
-      openCampaigns: z.number().int(),
-      fundedCampaigns: z.number().int(),
-      claimedCampaigns: z.number().int(),
-      failedCampaigns: z.number().int(),
-      totalPledgeVolume: z.number(),
-      uniqueContributors: z.number().int(),
+      total_campaigns: z.number().int().openapi({ example: 10 }),
+      open_campaigns: z.number().int().openapi({ example: 5 }),
+      funded_campaigns: z.number().int().openapi({ example: 3 }),
+      failed_campaigns: z.number().int().openapi({ example: 1 }),
+      total_pledged_usdc: z.number().openapi({ example: 35000 }),
+      total_pledged_xlm: z.number().openapi({ example: 15000 }),
+      total_contributors: z.number().int().openapi({ example: 42 }),
+      avg_funding_rate_pct: z.number().openapi({ example: 78.5 }),
+      totalCampaigns: z.number().int().optional(),
+      openCampaigns: z.number().int().optional(),
+      fundedCampaigns: z.number().int().optional(),
+      claimedCampaigns: z.number().int().optional(),
+      failedCampaigns: z.number().int().optional(),
+      totalPledgeVolume: z.number().optional(),
+      uniqueContributors: z.number().int().optional(),
     }),
   })
   .openapi('StatsResponse');

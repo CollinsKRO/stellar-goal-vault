@@ -252,20 +252,23 @@ Base URL:
 
 ### `GET /api/stats`
 
-- Returns aggregate metrics and totals computed from campaigns and pledges.
-- Cached with a 30-second TTL.
+- Returns aggregate metrics and totals computed from campaigns and pledges (platform summary).
+- Cached with a 60-second TTL.
+- Includes `X-Cache` header (`HIT` or `MISS`).
+- Public endpoint, no authentication required.
 - Response:
 
 ```json
 {
   "data": {
-    "totalCampaigns": 10,
-    "openCampaigns": 5,
-    "fundedCampaigns": 3,
-    "claimedCampaigns": 1,
-    "failedCampaigns": 1,
-    "totalPledgeVolume": 50000,
-    "uniqueContributors": 42
+    "total_campaigns": 10,
+    "open_campaigns": 5,
+    "funded_campaigns": 3,
+    "failed_campaigns": 1,
+    "total_pledged_usdc": 35000,
+    "total_pledged_xlm": 15000,
+    "total_contributors": 42,
+    "avg_funding_rate_pct": 78.5
   }
 }
 ```

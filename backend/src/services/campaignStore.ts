@@ -1,5 +1,6 @@
 import { getDb, initDb } from './db';
 import { getCampaignHistory, recordEvent, BlockchainMetadata } from './eventHistory';
+import { dispatchWebhook } from './webhookService';
 
 export type CampaignStatus = 'open' | 'funded' | 'claimed' | 'failed';
 
@@ -326,7 +327,10 @@ export interface GlobalStats {
   totalCampaigns: number;
   campaignCountByStatus: Record<CampaignStatus, number>;
   totalPledgedAmount: number;
+  totalPledgedUsdc: number;
+  totalPledgedXlm: number;
   totalContributors: number;
+  avgFundingRatePct: number;
   onChainCampaignCount?: number; // Total campaigns from contract
 }
 
@@ -483,6 +487,11 @@ if (options?.searchQuery && options.searchQuery.trim()) {
     ) {
         campaignRow.failed_at = campaignRow.deadline;
         db.prepare(`UPDATE campaigns SET failed_at = ? WHERE id = ?`).run(campaignRow.deadline, campaignRow.id);
+        void dispatchWebhook('campaign_failed', campaignRow.id, {
+          pledgedAmount: campaignRow.pledged_amount,
+          targetAmount: campaignRow.target_amount,
+          deadline: campaignRow.deadline,
+        });
     }
     
     return rowToCampaign(campaignRow as CampaignRow);
@@ -517,6 +526,11 @@ export function getCampaign(campaignId: string): CampaignRecord | undefined {
     ) {
         row.failed_at = row.deadline;
         db.prepare(`UPDATE campaigns SET failed_at = ? WHERE id = ?`).run(row.deadline, row.id);
+        void dispatchWebhook('campaign_failed', row.id, {
+          pledgedAmount: row.pledged_amount,
+          targetAmount: row.target_amount,
+          deadline: row.deadline,
+        });
     }
     const campaign = rowToCampaign(row);
     campaign.tokenBalances = getCampaignTokenBalances(campaignId);
@@ -972,6 +986,17 @@ export function reconcileOnChainPledge(
       } as BlockchainMetadata,
     );
 
+    const wasFunded = campaign.pledgedAmount >= campaign.targetAmount;
+    const isFunded = nextPledgedAmount >= campaign.targetAmount;
+    if (!wasFunded && isFunded) {
+      void dispatchWebhook('campaign_funded', campaignId, {
+        pledgedAmount: nextPledgedAmount,
+        targetAmount: campaign.targetAmount,
+        assetCode,
+        onChain: true,
+      });
+    }
+
     return true;
   })();
 
@@ -1007,15 +1032,23 @@ export function getGlobalStats(at = nowInMilliseconds()): GlobalStats {
     failed_count: number;
     open_count: number;
     total_pledged: number;
+    avg_funding_rate_pct: number;
   };
 
-  const contributorRow = db
+  const pledgeRow = db
     .prepare(
-      `SELECT COUNT(DISTINCT contributor) AS total_contributors
+      `SELECT
+        COUNT(DISTINCT contributor) AS total_contributors,
+        COALESCE(SUM(CASE WHEN UPPER(asset_code) = 'USDC' THEN amount ELSE 0 END), 0) AS total_usdc,
+        COALESCE(SUM(CASE WHEN UPPER(asset_code) = 'XLM' THEN amount ELSE 0 END), 0) AS total_xlm
        FROM pledges
        WHERE refunded_at IS NULL`,
     )
-    .get() as { total_contributors: number };
+    .get() as {
+    total_contributors: number;
+    total_usdc: number;
+    total_xlm: number;
+  };
 
   return {
     totalCampaigns: row.total_campaigns ?? 0,
@@ -1026,7 +1059,10 @@ export function getGlobalStats(at = nowInMilliseconds()): GlobalStats {
       failed: row.failed_count ?? 0,
     },
     totalPledgedAmount: round(row.total_pledged ?? 0),
-    totalContributors: contributorRow.total_contributors ?? 0,
+    totalPledgedUsdc: round(pledgeRow?.total_usdc ?? 0),
+    totalPledgedXlm: round(pledgeRow?.total_xlm ?? 0),
+    totalContributors: pledgeRow?.total_contributors ?? 0,
+    avgFundingRatePct: round(row.avg_funding_rate_pct ?? 0),
   };
 }
 
@@ -1072,6 +1108,13 @@ function reconcileOnChainClaim(campaignId: string, input: ReconciledClaimInput):
         txHash: input.transactionHash,
       } as BlockchainMetadata,
     );
+
+    void dispatchWebhook('vault_claimed', campaignId, {
+      creator: input.creator,
+      claimedAmount: campaign.pledgedAmount,
+      transactionHash: input.transactionHash,
+      confirmedAt: claimedAt,
+    });
   });
 
   commit();
@@ -1226,6 +1269,13 @@ export function refundContributor(
     walletAddress: reconciliation?.walletAddress,
     ledger: reconciliation?.ledger,
     latestLedger: reconciliation?.latestLedger,
+  });
+
+  void dispatchWebhook('pledge_refunded', campaignId, {
+    contributor,
+    refundedAmount,
+    refundedPledgeCount: refundablePledges.length,
+    refundedAt,
   });
 
   return {
