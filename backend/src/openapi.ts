@@ -251,6 +251,12 @@ const createdApiKeyResponseSchema = z
   })
   .openapi('CreatedApiKeyResponse');
 
+const rotateApiKeyRequestSchema = z
+  .object({
+    gracePeriodDays: z.number().int().positive().optional().openapi({ example: 7 }),
+  })
+  .openapi('RotateApiKeyRequest');
+
 // ---------------------------------------------------------------------------
 // Request / response envelope schemas
 // ---------------------------------------------------------------------------
@@ -448,6 +454,7 @@ const registeredSchemas = {
   CreateApiKeyRequest: registry.register('CreateApiKeyRequest', createApiKeyRequestSchema),
   ApiKeyResponse: registry.register('ApiKeyResponse', apiKeyResponseSchema),
   CreatedApiKeyResponse: registry.register('CreatedApiKeyResponse', createdApiKeyResponseSchema),
+  RotateApiKeyRequest: registry.register('RotateApiKeyRequest', rotateApiKeyRequestSchema),
 };
 
 // ---------------------------------------------------------------------------
@@ -905,6 +912,32 @@ registry.registerPath({
   },
   responses: {
     204: { description: 'API key revoked' },
+    404: notFoundResponse,
+  },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/api/api-keys/{id}/rotate',
+  tags: ['API Keys'],
+  summary: 'Rotate an API key',
+  description: 'Creates a new API key to replace the specified key. The old key remains valid during a grace period (default 7 days) before being automatically revoked.',
+  security: [],
+  request: {
+    params: z.object({
+      id: z.string().openapi({ param: { name: 'id', in: 'path', required: true }, example: 'abc123def456' }),
+    }),
+    body: {
+      content: { 'application/json': { schema: registeredSchemas.RotateApiKeyRequest } },
+      description: 'API key rotation payload',
+    },
+  },
+  responses: {
+    201: {
+      description: 'API key rotated',
+      content: { 'application/json': { schema: registeredSchemas.CreatedApiKeyResponse } },
+    },
+    400: validationErrorResponse,
     404: notFoundResponse,
   },
 });
