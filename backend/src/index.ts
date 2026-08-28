@@ -72,6 +72,7 @@ import {
   createApiKey,
   listApiKeys,
   revokeApiKey,
+  rotateApiKey,
   type ApiKeyScope,
 } from './services/apiKeyStore';
 export const app = express();
@@ -751,6 +752,47 @@ app.delete('/api/api-keys/:id', (req: Request, res: Response) => {
 
   res.status(204).send();
 });
+
+const rotateApiKeySchema = z.object({
+  gracePeriodDays: z.number().int().positive().optional(),
+});
+
+app.post(
+  '/api/api-keys/:id/rotate',
+  validateBody(rotateApiKeySchema),
+  (req: Request, res: Response) => {
+    const { id } = req.params;
+    const parsed = rotateApiKeySchema.safeParse(req.body);
+    if (!parsed.success) {
+      sendValidationError(parsed.error.issues);
+    }
+
+    if (!id || typeof id !== 'string') {
+      throw new AppError('API key ID is required', 400, 'VALIDATION_ERROR');
+    }
+
+    const { gracePeriodDays } = parsed.data;
+    const rotatedKey = rotateApiKey(id, { gracePeriodDays });
+
+    if (!rotatedKey) {
+      throw new AppError('API key not found or already revoked', 404, 'NOT_FOUND');
+    }
+
+    logInfo('api_key_rotated', { oldKeyId: id, newKeyId: rotatedKey.id, gracePeriodDays }, config.logLevel);
+
+    res.status(201).json({
+      data: {
+        id: rotatedKey.id,
+        name: rotatedKey.name,
+        keyPrefix: rotatedKey.keyPrefix,
+        plainKey: rotatedKey.plainKey,
+        scope: rotatedKey.scope,
+        createdAt: rotatedKey.createdAt,
+        expiresAt: rotatedKey.expiresAt,
+      },
+    });
+  },
+);
 
 app.get('/api/config', (_req: Request, res: Response) => {
   res.json({
