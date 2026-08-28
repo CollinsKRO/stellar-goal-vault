@@ -1,6 +1,6 @@
-import { Request, Response, NextFunction } from "express";
-import { AppError } from "../types/errors";
-import { validateApiKey, isReadOnlyKey, type ApiKeyRecord } from "../services/apiKeyStore";
+import { Request, Response, NextFunction } from 'express';
+import { AppError } from '../types/errors';
+import { validateApiKey, isReadOnlyKey, type ApiKeyRecord } from '../services/apiKeyStore';
 
 export interface RequestWithApiKey extends Request {
   apiKey?: string;
@@ -11,22 +11,19 @@ export interface RequestWithApiKey extends Request {
 
 // Paths that are always public (don't require any authentication)
 const PUBLIC_PATHS = [
-  "/api/health",
-  "/api/config",
-  "/api/stats",
-  "/api/leaderboard",
-  "/api/open-issues",
-  "/api/openapi.json",
+  '/api/health',
+  '/api/config',
+  '/api/stats',
+  '/api/leaderboard',
+  '/api/open-issues',
+  '/api/openapi.json',
   // API key management routes are excluded from auth
-  "/api/api-keys",
+  '/api/api-keys',
 ];
 
 // Paths that require read-write access (mutation endpoints)
-const WRITE_METHODS = ["POST", "PUT", "PATCH", "DELETE"];
-const READ_WRITE_PATHS = [
-  "/api/campaigns",
-  "/api/pledges",
-];
+const WRITE_METHODS = ['POST', 'PUT', 'PATCH', 'DELETE'];
+const READ_WRITE_PATHS = ['/api/campaigns', '/api/pledges'];
 
 /**
  * API Key authentication middleware.
@@ -48,16 +45,16 @@ export function apiKeyAuthMiddleware(
   }
 
   // Extract API key from X-API-Key header or Authorization header
-  const apiKeyHeader = req.headers["x-api-key"] as string | undefined;
+  const apiKeyHeader = req.headers['x-api-key'] as string | undefined;
   const authHeader = req.headers.authorization;
-  const bearerKey = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : undefined;
+  const bearerKey = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : undefined;
   const apiKey = apiKeyHeader || bearerKey;
 
   if (!apiKey) {
     throw new AppError(
-      "Missing API key. Provide via X-API-Key header or Authorization: Bearer <api-key>",
+      'Missing API key. Provide via X-API-Key header or Authorization: Bearer <api-key>',
       401,
-      "UNAUTHORIZED",
+      'UNAUTHORIZED',
     );
   }
 
@@ -71,18 +68,14 @@ export function apiKeyAuthMiddleware(
 
     // Check if read-only key is being used for mutation
     if (req.isReadOnly && isMutationRequest(req)) {
-      throw new AppError(
-        "Read-only API key cannot perform mutation operations.",
-        403,
-        "FORBIDDEN",
-      );
+      throw new AppError('Read-only API key cannot perform mutation operations.', 403, 'FORBIDDEN');
     }
 
     return next();
   }
 
   // Fallback to legacy environment variable API keys
-  const validApiKeys = (process.env.API_KEYS || "").split(",").filter(Boolean);
+  const validApiKeys = (process.env.API_KEYS || '').split(',').filter(Boolean);
 
   if (validApiKeys.length === 0) {
     // If no API keys configured anywhere, allow all requests (development mode)
@@ -92,7 +85,7 @@ export function apiKeyAuthMiddleware(
   }
 
   if (!validApiKeys.includes(apiKey)) {
-    throw new AppError("Invalid API key", 403, "FORBIDDEN");
+    throw new AppError('Invalid API key', 403, 'FORBIDDEN');
   }
 
   req.isAuthenticated = true;

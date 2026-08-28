@@ -125,9 +125,7 @@ export function listApiKeys(): ApiKeyRecord[] {
 export function revokeApiKey(id: string): boolean {
   const db = getDb();
   const result = db
-    .prepare(
-      `UPDATE api_keys SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL`,
-    )
+    .prepare(`UPDATE api_keys SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL`)
     .run(Math.floor(Date.now() / 1000), id);
 
   return result.changes > 0;
@@ -158,7 +156,8 @@ export function rotateApiKey(id: string, input: RotateApiKeyInput = {}): Created
   const { plainKey, prefix, hash } = generateApiKey();
 
   // Calculate grace period end (default 7 days)
-  const gracePeriodDays = input.gracePeriodDays && input.gracePeriodDays > 0 ? input.gracePeriodDays : 7;
+  const gracePeriodDays =
+    input.gracePeriodDays && input.gracePeriodDays > 0 ? input.gracePeriodDays : 7;
   const gracePeriodEndsAt = now + gracePeriodDays * 24 * 60 * 60;
 
   const newId = randomBytes(16).toString('hex');
@@ -167,12 +166,23 @@ export function rotateApiKey(id: string, input: RotateApiKeyInput = {}): Created
   db.prepare(
     `INSERT INTO api_keys (id, name, key_prefix, key_hash, scope, created_at, expires_at, rotated_from, grace_period_ends_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).run(newId, oldKeyRow.name, prefix, hash, oldKeyRow.scope, now, oldKeyRow.expires_at, oldKeyRow.id, gracePeriodEndsAt);
+  ).run(
+    newId,
+    oldKeyRow.name,
+    prefix,
+    hash,
+    oldKeyRow.scope,
+    now,
+    oldKeyRow.expires_at,
+    oldKeyRow.id,
+    gracePeriodEndsAt,
+  );
 
   // Update old key: set grace_period_ends_at and mark as rotated
-  db.prepare(
-    `UPDATE api_keys SET grace_period_ends_at = ? WHERE id = ?`,
-  ).run(gracePeriodEndsAt, id);
+  db.prepare(`UPDATE api_keys SET grace_period_ends_at = ? WHERE id = ?`).run(
+    gracePeriodEndsAt,
+    id,
+  );
 
   return {
     id: newId,

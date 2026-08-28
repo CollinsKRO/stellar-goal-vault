@@ -778,7 +778,11 @@ app.post(
       throw new AppError('API key not found or already revoked', 404, 'NOT_FOUND');
     }
 
-    logInfo('api_key_rotated', { oldKeyId: id, newKeyId: rotatedKey.id, gracePeriodDays }, config.logLevel);
+    logInfo(
+      'api_key_rotated',
+      { oldKeyId: id, newKeyId: rotatedKey.id, gracePeriodDays },
+      config.logLevel,
+    );
 
     res.status(201).json({
       data: {

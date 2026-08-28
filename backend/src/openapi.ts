@@ -860,7 +860,8 @@ registry.registerPath({
   path: '/api/api-keys',
   tags: ['API Keys'],
   summary: 'Create an API key',
-  description: 'Creates a new API key with the specified scope. The plain key is only returned once.',
+  description:
+    'Creates a new API key with the specified scope. The plain key is only returned once.',
   security: [],
   request: {
     body: {
@@ -907,7 +908,9 @@ registry.registerPath({
   security: [],
   request: {
     params: z.object({
-      id: z.string().openapi({ param: { name: 'id', in: 'path', required: true }, example: 'abc123def456' }),
+      id: z
+        .string()
+        .openapi({ param: { name: 'id', in: 'path', required: true }, example: 'abc123def456' }),
     }),
   },
   responses: {
@@ -921,11 +924,14 @@ registry.registerPath({
   path: '/api/api-keys/{id}/rotate',
   tags: ['API Keys'],
   summary: 'Rotate an API key',
-  description: 'Creates a new API key to replace the specified key. The old key remains valid during a grace period (default 7 days) before being automatically revoked.',
+  description:
+    'Creates a new API key to replace the specified key. The old key remains valid during a grace period (default 7 days) before being automatically revoked.',
   security: [],
   request: {
     params: z.object({
-      id: z.string().openapi({ param: { name: 'id', in: 'path', required: true }, example: 'abc123def456' }),
+      id: z
+        .string()
+        .openapi({ param: { name: 'id', in: 'path', required: true }, example: 'abc123def456' }),
     }),
     body: {
       content: { 'application/json': { schema: registeredSchemas.RotateApiKeyRequest } },
