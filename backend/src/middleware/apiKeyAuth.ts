@@ -1,6 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
 import { AppError } from '../types/errors';
-import { validateApiKey, isReadOnlyKey, type ApiKeyRecord } from '../services/apiKeyStore';
 
 export interface RequestWithApiKey extends Request {
   apiKey?: string;
@@ -36,6 +35,15 @@ export function apiKeyAuthMiddleware(
   res: Response,
   next: NextFunction,
 ): void {
+  // Public endpoints that don't require authentication
+  const publicPaths = [
+    '/api/health',
+    '/api/config',
+    '/api/stats',
+    '/api/leaderboard',
+    '/api/open-issues',
+  ];
+
   // Check if current path is public
   const isPublicPath = PUBLIC_PATHS.some((path) => req.path.startsWith(path));
 
@@ -47,34 +55,15 @@ export function apiKeyAuthMiddleware(
   // Extract API key from X-API-Key header or Authorization header
   const apiKeyHeader = req.headers['x-api-key'] as string | undefined;
   const authHeader = req.headers.authorization;
-  const bearerKey = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : undefined;
-  const apiKey = apiKeyHeader || bearerKey;
-
-  if (!apiKey) {
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
     throw new AppError(
-      'Missing API key. Provide via X-API-Key header or Authorization: Bearer <api-key>',
+      'Missing or invalid Authorization header. Use format: Bearer <api-key>',
       401,
       'UNAUTHORIZED',
     );
   }
 
-  // Try to validate against database (new API key management)
-  const dbKeyRecord = validateApiKey(apiKey);
-  if (dbKeyRecord) {
-    req.isAuthenticated = true;
-    req.apiKey = apiKey;
-    req.apiKeyRecord = dbKeyRecord;
-    req.isReadOnly = isReadOnlyKey(dbKeyRecord);
-
-    // Check if read-only key is being used for mutation
-    if (req.isReadOnly && isMutationRequest(req)) {
-      throw new AppError('Read-only API key cannot perform mutation operations.', 403, 'FORBIDDEN');
-    }
-
-    return next();
-  }
-
-  // Fallback to legacy environment variable API keys
+  const apiKey = authHeader.slice(7); // Remove "Bearer " prefix
   const validApiKeys = (process.env.API_KEYS || '').split(',').filter(Boolean);
 
   if (validApiKeys.length === 0) {

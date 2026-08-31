@@ -27,32 +27,49 @@ import {
   CampaignStatus,
   claimCampaign,
   createCampaign,
+  createComment,
+  deleteComment,
   getCampaign,
   getCampaignWithProgress,
   getContributorSummary,
   getGlobalStats,
+  getTrendingCampaigns,
   getTopContributors,
   initCampaignStore,
   listCampaignPledges,
   listCampaigns,
+  listComments,
   type ListCampaignsOptions,
   reconcileOnChainPledge,
   refundContributor,
+  restoreCampaign,
+  softDeleteCampaign,
   SortOrder,
 } from './services/campaignStore';
 import { checkDbHealth } from './services/db';
-import { listCampaignHistory } from './services/eventHistory';
+import { getCampaignTimeline, listCampaignHistory } from './services/eventHistory';
 import { startEventIndexer } from './services/eventIndexer';
+import {
+  listNotifications,
+  getUnreadCount,
+  markAllRead,
+} from './services/notificationService';
+import { getDeadLetterQueue, clearDeadLetterQueue, retryDeadLetter } from './services/webhookService';
 import { fetchOpenIssues } from './services/openIssues';
 import { ensureSorobanRefundConfig, verifyRefundTransaction } from './services/sorobanRpc';
 import { AppError, ApiErrorResponse } from './types/errors';
 import {
   campaignIdSchema,
   claimCampaignPayloadSchema,
+  commentIdSchema,
   createCampaignPayloadSchema,
+  createCommentPayloadSchema,
   createPledgePayloadSchema,
+  deleteCommentPayloadSchema,
+  parseCommentListPaginationQuery,
   parseHistoryPaginationQuery,
   parsePledgeListPaginationQuery,
+  parseTimelineQuery,
   reconcilePledgePayloadSchema,
   refundPayloadSchema,
   zodIssuesToErrorMessage,
@@ -61,21 +78,15 @@ import {
   normalizeQueryValue,
 } from './validation/schemas';
 import { generateOpenApiDocument } from './openapi';
-import { logError, logInfo } from './logger';
+import { logError, logInfo, logger } from './logger';
 import {
   buildCampaignCacheKey,
   getCampaignCacheEntry,
+  getTrendingCacheEntry,
+  setTrendingCacheEntry,
   invalidateCampaignCache,
   setCampaignCacheEntry,
-} from './services/campaignCache';
-import {
-  createApiKey,
-  listApiKeys,
-  revokeApiKey,
-  rotateApiKey,
-  type ApiKeyScope,
-} from './services/apiKeyStore';
-export const app = express();
+} from './services/campaignCache';export const app = express();
 
 type CampaignListItem = CampaignRecord & { progress: CampaignProgress };
 
@@ -395,7 +406,8 @@ app.get('/api/health/deep', applyRateLimit(1000), async (_req: Request, res: Res
   }
 });
 
-app.get('/api/campaigns', (req: Request, res: Response) => {
+app.get('/api/campaigns', async (req: Request, res: Response, next: express.NextFunction) => {
+  try {
   const queryResult = parseCampaignListQuery(req.query as Record<string, unknown>);
   if (!queryResult.ok) {
     sendValidationError(queryResult.issues);
@@ -410,10 +422,10 @@ app.get('/api/campaigns', (req: Request, res: Response) => {
     .join('&');
   const cacheKey = buildCampaignCacheKey(qs);
 
-  const cached = getCampaignCacheEntry(cacheKey);
+  const cached = await getCampaignCacheEntry(cacheKey);
   if (cached) {
     const cachedData = JSON.parse(cached);
-    res.setHeader('Cache-Control', 'max-age=5');
+    res.setHeader('Cache-Control', 'max-age=30');
     res.setHeader('X-Cache', 'HIT');
     res.setHeader('X-Total-Count', String(cachedData.pagination.total));
     res.setHeader('Content-Type', 'application/json');
@@ -458,11 +470,36 @@ app.get('/api/campaigns', (req: Request, res: Response) => {
     },
   });
 
-  setCampaignCacheEntry(cacheKey, responseBody);
+  await setCampaignCacheEntry(cacheKey, responseBody);
 
-  res.setHeader('Cache-Control', 'max-age=5');
+  res.setHeader('Cache-Control', 'max-age=30');
   res.setHeader('X-Cache', 'MISS');
   res.setHeader('X-Total-Count', String(totalCount));
+  res.setHeader('Content-Type', 'application/json');
+  res.send(responseBody);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/campaigns/trending', (req: Request, res: Response) => {
+  const cached = getTrendingCacheEntry();
+  if (cached) {
+    res.setHeader('X-Cache', 'HIT');
+    res.setHeader('Content-Type', 'application/json');
+    res.send(cached);
+    return;
+  }
+
+  const campaigns = getTrendingCampaigns(10);
+
+  const responseBody = JSON.stringify({
+    data: campaigns,
+  });
+
+  setTrendingCacheEntry(responseBody);
+
+  res.setHeader('X-Cache', 'MISS');
   res.setHeader('Content-Type', 'application/json');
   res.send(responseBody);
 });
@@ -473,13 +510,62 @@ app.get('/api/campaigns/:id', (req: Request, res: Response) => {
     sendValidationError(parsedId.issues);
   }
 
-  const campaign = getCampaignWithProgress(parsedId.value, CAMPAIGN_DETAIL_PLEDGE_PREVIEW_LIMIT);
-  if (!campaign) {
-    throw new AppError('Campaign not found.', 404, 'NOT_FOUND');
-  }
+    const cacheKey = `campaigns:detail:${parsedId.value}`;
+    const cached = await getCampaignCacheEntry(cacheKey);
+    if (cached) {
+      res.setHeader('Cache-Control', 'max-age=30');
+      res.setHeader('X-Cache', 'HIT');
+      res.setHeader('Content-Type', 'application/json');
+      res.send(cached);
+      return;
+    }
 
-  res.json({ data: campaign });
+    const campaign = getCampaignWithProgress(parsedId.value, CAMPAIGN_DETAIL_PLEDGE_PREVIEW_LIMIT);
+    if (!campaign) {
+      throw new AppError('Campaign not found.', 404, 'NOT_FOUND');
+    }
+
+    const responseBody = JSON.stringify({ data: campaign });
+    await setCampaignCacheEntry(cacheKey, responseBody);
+
+    res.setHeader('Cache-Control', 'max-age=30');
+    res.setHeader('X-Cache', 'MISS');
+    res.setHeader('Content-Type', 'application/json');
+    res.send(responseBody);
+  } catch (error) {
+    next(error);
+  }
 });
+
+app.delete(
+  '/api/campaigns/:id',
+  applyRateLimit(WRITE_RATE_LIMIT_MAX_REQUESTS),
+  (req: Request, res: Response) => {
+    const parsedId = parseCampaignId(req.params.id);
+    if (!parsedId.ok) {
+      sendValidationError(parsedId.issues);
+    }
+
+    const campaign = softDeleteCampaign(parsedId.value);
+    invalidateCampaignCache();
+    res.json({ data: { ...campaign, progress: calculateProgress(campaign) } });
+  },
+);
+
+app.post(
+  '/api/campaigns/:id/restore',
+  applyRateLimit(WRITE_RATE_LIMIT_MAX_REQUESTS),
+  (req: Request, res: Response) => {
+    const parsedId = parseCampaignId(req.params.id);
+    if (!parsedId.ok) {
+      sendValidationError(parsedId.issues);
+    }
+
+    const campaign = restoreCampaign(parsedId.value);
+    invalidateCampaignCache();
+    res.json({ data: { ...campaign, progress: calculateProgress(campaign) } });
+  },
+);
 
 app.get('/api/campaigns/:id/pledges', (req: Request, res: Response) => {
   const parsedId = parseCampaignId(req.params.id);
@@ -521,7 +607,8 @@ app.get('/api/campaigns/:id/pledges', (req: Request, res: Response) => {
 app.post(
   '/api/campaigns',
   validateBody(createCampaignPayloadSchema),
-  (req: Request, res: Response) => {
+  async (req: Request, res: Response, next: express.NextFunction) => {
+    try {
     const body = req.body as z.infer<typeof createCampaignPayloadSchema>;
 
     if (body.deadline <= Math.floor(Date.now() / 1000)) {
@@ -536,16 +623,21 @@ app.post(
     };
 
     const campaign = createCampaign(campaignInput);
-    invalidateCampaignCache();
+    await invalidateCampaignCache();
     res.status(201).json({ data: { ...campaign, progress: calculateProgress(campaign) } });
+    } catch (error) {
+      next(error);
+    }
   },
 );
 
 app.post(
   '/api/campaigns/:id/pledges',
   applyRateLimit(WRITE_RATE_LIMIT_MAX_REQUESTS),
+  idempotencyMiddleware,
   validateBody(createPledgePayloadSchema),
-  (req: Request, res: Response) => {
+  async (req: Request, res: Response, next: express.NextFunction) => {
+    try {
     const parsedId = parseCampaignId(req.params.id);
     if (!parsedId.ok) {
       sendValidationError(parsedId.issues);
@@ -553,8 +645,11 @@ app.post(
 
     const body = req.body as z.infer<typeof createPledgePayloadSchema>;
     const campaign = addPledge(parsedId.value, body);
-    invalidateCampaignCache();
+    await invalidateCampaignCache();
     res.status(201).json({ data: { ...campaign, progress: calculateProgress(campaign) } });
+    } catch (error) {
+      next(error);
+    }
   },
 );
 
@@ -562,7 +657,8 @@ app.post(
   '/api/campaigns/:id/pledges/reconcile',
   applyRateLimit(WRITE_RATE_LIMIT_MAX_REQUESTS),
   validateBody(reconcilePledgePayloadSchema),
-  (req: Request, res: Response) => {
+  async (req: Request, res: Response, next: express.NextFunction) => {
+    try {
     const parsedId = parseCampaignId(req.params.id);
     if (!parsedId.ok) {
       sendValidationError(parsedId.issues);
@@ -577,6 +673,9 @@ app.post(
         transactionHash: body.transactionHash,
       },
     });
+    } catch (error) {
+      next(error);
+    }
   },
 );
 
@@ -584,7 +683,8 @@ app.post(
   '/api/campaigns/:id/claim',
   applyRateLimit(WRITE_RATE_LIMIT_MAX_REQUESTS),
   validateBody(claimCampaignPayloadSchema),
-  (req: Request, res: Response) => {
+  async (req: Request, res: Response, next: express.NextFunction) => {
+    try {
     const parsedId = parseCampaignId(req.params.id);
     if (!parsedId.ok) {
       sendValidationError(parsedId.issues);
@@ -596,8 +696,11 @@ app.post(
       transactionHash: body.transactionHash,
       confirmedAt: body.confirmedAt,
     });
-    invalidateCampaignCache();
+    await invalidateCampaignCache();
     res.json({ data: { ...campaign, progress: calculateProgress(campaign) } });
+    } catch (error) {
+      next(error);
+    }
   },
 );
 
@@ -623,7 +726,7 @@ app.post(
         latestLedger: verified.latestLedger ?? body.soroban.latestLedger,
         source: 'soroban-contract',
       });
-      invalidateCampaignCache();
+      await invalidateCampaignCache();
 
       res.json({
         data: {
@@ -677,126 +780,57 @@ app.get('/api/campaigns/:id/history', (req: Request, res: Response) => {
   res.json(result);
 });
 
+app.get('/api/campaigns/:id/timeline', (req: Request, res: Response) => {
+  const parsedId = parseCampaignId(req.params.id);
+  if (!parsedId.ok) {
+    sendValidationError(parsedId.issues);
+  }
+
+  const campaign = getCampaign(parsedId.value);
+  if (!campaign) {
+    throw new AppError('Campaign not found.', 404, 'NOT_FOUND');
+  }
+
+  const parsed = parseTimelineQuery(req.query);
+  if (!parsed.ok) {
+    sendValidationError(parsed.issues);
+  }
+
+  const result = getCampaignTimeline(parsedId.value, {
+    cursor: parsed.cursor,
+    limit: parsed.limit,
+  });
+
+  res.json({ data: result.data, pagination: { nextCursor: result.nextCursor, hasMore: result.hasMore } });
+});
+
 app.get('/api/open-issues', async (_req: Request, res: Response) => {
   const data = await fetchOpenIssues();
   res.json({ data });
 });
 
-// API Key Management Routes
-// Note: These routes are excluded from API key authentication to allow key management
+const ASSET_METADATA: Record<string, { name: string, icon_url: string, min_pledge: number, max_pledge: number }> = {
+  USDC: { name: 'USD Coin', icon_url: 'https://cryptologos.cc/logos/usd-coin-usdc-logo.png', min_pledge: 1, max_pledge: 10000 },
+  XLM: { name: 'Stellar Lumens', icon_url: 'https://cryptologos.cc/logos/stellar-xlm-logo.png', min_pledge: 10, max_pledge: 100000 },
+  ARS: { name: 'Argentine Peso', icon_url: '', min_pledge: 1000, max_pledge: 10000000 },
+};
 
-const createApiKeySchema = z.object({
-  name: z.string().min(1).max(100),
-  scope: z.enum(['read-only', 'read-write']),
-  expiresInDays: z.number().int().positive().optional(),
+const supportedAssetsCache = config.allowedAssets.map((code) => {
+  const meta = ASSET_METADATA[code] || { name: code, icon_url: '', min_pledge: 0, max_pledge: 0 };
+  return {
+    code,
+    name: meta.name,
+    contract_address: config.assetAddresses[code] || '',
+    icon_url: meta.icon_url,
+    min_pledge: meta.min_pledge,
+    max_pledge: meta.max_pledge,
+  };
 });
 
-app.post('/api/api-keys', validateBody(createApiKeySchema), (req: Request, res: Response) => {
-  const parsed = createApiKeySchema.safeParse(req.body);
-  if (!parsed.success) {
-    sendValidationError(parsed.error.issues);
-  }
-
-  const { name, scope, expiresInDays } = parsed.data;
-
-  const newKey = createApiKey({
-    name,
-    scope: scope as ApiKeyScope,
-    expiresInDays,
-  });
-
-  logInfo('api_key_created', { keyId: newKey.id, name, scope }, config.logLevel);
-
-  res.status(201).json({
-    data: {
-      id: newKey.id,
-      name: newKey.name,
-      keyPrefix: newKey.keyPrefix,
-      plainKey: newKey.plainKey,
-      scope: newKey.scope,
-      createdAt: newKey.createdAt,
-      expiresAt: newKey.expiresAt,
-    },
-  });
+app.get('/api/assets', (_req: Request, res: Response) => {
+  res.setHeader('Cache-Control', 'public, max-age=31536000');
+  res.json({ data: supportedAssetsCache });
 });
-
-app.get('/api/api-keys', (_req: Request, res: Response) => {
-  const keys = listApiKeys();
-
-  res.json({
-    data: keys.map((key) => ({
-      id: key.id,
-      name: key.name,
-      keyPrefix: key.keyPrefix,
-      scope: key.scope,
-      createdAt: key.createdAt,
-      expiresAt: key.expiresAt,
-      lastUsedAt: key.lastUsedAt,
-    })),
-  });
-});
-
-app.delete('/api/api-keys/:id', (req: Request, res: Response) => {
-  const { id } = req.params;
-
-  if (!id || typeof id !== 'string') {
-    throw new AppError('API key ID is required', 400, 'VALIDATION_ERROR');
-  }
-
-  const revoked = revokeApiKey(id);
-  if (!revoked) {
-    throw new AppError('API key not found or already revoked', 404, 'NOT_FOUND');
-  }
-
-  logInfo('api_key_revoked', { keyId: id }, config.logLevel);
-
-  res.status(204).send();
-});
-
-const rotateApiKeySchema = z.object({
-  gracePeriodDays: z.number().int().positive().optional(),
-});
-
-app.post(
-  '/api/api-keys/:id/rotate',
-  validateBody(rotateApiKeySchema),
-  (req: Request, res: Response) => {
-    const { id } = req.params;
-    const parsed = rotateApiKeySchema.safeParse(req.body);
-    if (!parsed.success) {
-      sendValidationError(parsed.error.issues);
-    }
-
-    if (!id || typeof id !== 'string') {
-      throw new AppError('API key ID is required', 400, 'VALIDATION_ERROR');
-    }
-
-    const { gracePeriodDays } = parsed.data;
-    const rotatedKey = rotateApiKey(id, { gracePeriodDays });
-
-    if (!rotatedKey) {
-      throw new AppError('API key not found or already revoked', 404, 'NOT_FOUND');
-    }
-
-    logInfo(
-      'api_key_rotated',
-      { oldKeyId: id, newKeyId: rotatedKey.id, gracePeriodDays },
-      config.logLevel,
-    );
-
-    res.status(201).json({
-      data: {
-        id: rotatedKey.id,
-        name: rotatedKey.name,
-        keyPrefix: rotatedKey.keyPrefix,
-        plainKey: rotatedKey.plainKey,
-        scope: rotatedKey.scope,
-        createdAt: rotatedKey.createdAt,
-        expiresAt: rotatedKey.expiresAt,
-      },
-    });
-  },
-);
 
 app.get('/api/config', (_req: Request, res: Response) => {
   res.json({
@@ -818,10 +852,18 @@ app.get('/api/config', (_req: Request, res: Response) => {
   });
 });
 
-app.get('/api/stats', cacheMiddleware(30), (_req: Request, res: Response) => {
+app.get('/api/stats', cacheMiddleware(60), (_req: Request, res: Response) => {
   const stats = getGlobalStats();
   res.json({
     data: {
+      total_campaigns: stats.totalCampaigns,
+      open_campaigns: stats.campaignCountByStatus.open,
+      funded_campaigns: stats.campaignCountByStatus.funded,
+      failed_campaigns: stats.campaignCountByStatus.failed,
+      total_pledged_usdc: stats.totalPledgedUsdc,
+      total_pledged_xlm: stats.totalPledgedXlm,
+      total_contributors: stats.totalContributors,
+      avg_funding_rate_pct: stats.avgFundingRatePct,
       totalCampaigns: stats.totalCampaigns,
       openCampaigns: stats.campaignCountByStatus.open,
       fundedCampaigns: stats.campaignCountByStatus.funded,
@@ -862,6 +904,80 @@ app.get('/api/leaderboard', (req: Request, res: Response) => {
   }
 });
 
+// ── Notification Routes ───────────────────────────────────────────────────────
+
+app.get('/api/notifications', (req: Request, res: Response) => {
+  const wallet = normalizeQueryValue(req.query.wallet);
+  if (!wallet) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'MISSING_WALLET', message: 'wallet query parameter is required' },
+    });
+  }
+  const rawLimit = normalizeQueryValue(req.query.limit);
+  const rawOffset = normalizeQueryValue(req.query.offset);
+  const limit = rawLimit ? Math.min(Math.max(1, Number(rawLimit)), 100) : 50;
+  const offset = rawOffset ? Math.max(0, Number(rawOffset)) : 0;
+
+  const result = listNotifications(wallet, { limit, offset });
+  const unreadCount = getUnreadCount(wallet);
+  res.json({ data: result.data, total: result.total, unreadCount });
+});
+
+app.get('/api/notifications/unread-count', (req: Request, res: Response) => {
+  const wallet = normalizeQueryValue(req.query.wallet);
+  if (!wallet) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'MISSING_WALLET', message: 'wallet query parameter is required' },
+    });
+  }
+  const unreadCount = getUnreadCount(wallet);
+  res.json({ unreadCount });
+});
+
+app.post('/api/notifications/mark-all-read', (req: Request, res: Response) => {
+  const { wallet } = req.body as { wallet?: string };
+  if (!wallet || typeof wallet !== 'string') {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'MISSING_WALLET', message: 'wallet is required in request body' },
+    });
+  }
+  markAllRead(wallet);
+  res.json({ success: true });
+});
+
+app.get('/api/webhooks/dead-letter', (req: Request, res: Response) => {
+  const limit = req.query.limit ? Number(req.query.limit) : 50;
+  const entries = getDeadLetterQueue(limit);
+  res.json({ success: true, data: entries });
+});
+
+app.delete('/api/webhooks/dead-letter', (_req: Request, res: Response) => {
+  clearDeadLetterQueue();
+  res.json({ success: true, message: 'Dead-letter queue cleared' });
+});
+
+app.post('/api/webhooks/dead-letter/:id/retry', async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  if (Number.isNaN(id)) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'BAD_REQUEST', message: 'Invalid dead-letter ID' },
+    });
+  }
+  const success = await retryDeadLetter(id);
+  if (success) {
+    res.json({ success: true, message: 'Webhook retried successfully' });
+  } else {
+    res.status(500).json({
+      success: false,
+      error: { code: 'WEBHOOK_RETRY_FAILED', message: 'Failed to retry webhook delivery' },
+    });
+  }
+});
+
 function isErrorWithMessage(error: unknown): error is { message: string; [key: string]: unknown } {
   return (
     typeof error === 'object' &&
@@ -882,7 +998,7 @@ app.use((err: unknown, req: Request, res: Response, next: express.NextFunction) 
       success: false,
       error: {
         code: 'PAYLOAD_TOO_LARGE',
-        message: 'Request payload size exceeds the maximum allowed limit',
+        message: `Request body exceeds the ${bodySizeLimit} maximum limit.`, 
         requestId: (req as RequestWithId).requestId,
       },
     });
